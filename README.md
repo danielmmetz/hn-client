@@ -1,6 +1,8 @@
 # HN Client
 
-A mobile-first PWA Hacker News reader with a Go+SQLite caching backend. The server proxies and caches HN data (stories, comments, reader-mode article extractions), provides alternative ranking APIs (top of day/week), and streams updates to clients over SSE. Authentication is handled via OIDC. The client uses Preact, IndexedDB for offline storage, and a Service Worker for app shell caching.
+**Subway-compatible Hacker News.** The idea is simple: you open the app before going underground, and it already has everything you need. The server proactively fetches top stories, their full comment trees, and reader-mode article extractions on a 5-minute cycle. The client prefetches this data into IndexedDB so that stories, articles, and comments are all available offline — no loading spinners, no "connect to read more." When you resurface, it syncs up quietly via SSE.
+
+A mobile-first PWA with a Go+SQLite caching backend. The server proxies and caches HN data (stories, comments, reader-mode article extractions), provides alternative ranking APIs (top of day/week), and streams updates to clients over SSE. Authentication is handled via OIDC. The client uses Preact, IndexedDB for offline storage, and a Service Worker for app shell caching.
 
 ---
 
