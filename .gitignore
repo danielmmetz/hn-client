@@ -1,0 +1,25 @@
+# Compiled Go binaries
+hn-server
+server/hn-server
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Environment variables
+.env
+
+# Node / Vite
+node_modules/
+client/dist/
+
+# Built static assets (regenerated from client/)
+server/static/
+
+# OS
+.DS_Store
+
+# Sprite / Pi agent
+.pi/
+server/start.sh
