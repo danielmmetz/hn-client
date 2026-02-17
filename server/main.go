@@ -5,12 +5,14 @@ import (
 	"embed"
 	"flag"
 	"io/fs"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/peterbourgon/ff/v3"
 
@@ -27,12 +29,24 @@ var staticFiles embed.FS
 func main() {
 	flagSet := flag.NewFlagSet("hn-client", flag.ExitOnError)
 
-	staticDir := flagSet.String("static-dir", "", "Path to static files directory (default: use embedded files)")
-	dbPath := flagSet.String("db-path", "hn.db", "Path to SQLite database file")
-	oidcIssuer := flagSet.String("oidc-issuer", "", "OIDC issuer URL")
-	oidcClientID := flagSet.String("oidc-client-id", "", "OIDC client ID")
-	oidcClientSecret := flagSet.String("oidc-client-secret", "", "OIDC client secret")
-	oidcRedirectURI := flagSet.String("oidc-redirect-uri", "", "OIDC redirect URI")
+	var (
+		addr             string
+		port             int
+		staticDir        string
+		dbPath           string
+		oidcIssuer       string
+		oidcClientID     string
+		oidcClientSecret string
+		oidcRedirectURI  string
+	)
+	flagSet.StringVar(&addr, "addr", "localhost", "Address to listen on")
+	flagSet.IntVar(&port, "port", 8080, "Port to listen on")
+	flagSet.StringVar(&staticDir, "static-dir", "", "Path to static files directory (default: use embedded files)")
+	flagSet.StringVar(&dbPath, "db-path", "hn.db", "Path to SQLite database file")
+	flagSet.StringVar(&oidcIssuer, "oidc-issuer", "", "OIDC issuer URL")
+	flagSet.StringVar(&oidcClientID, "oidc-client-id", "", "OIDC client ID")
+	flagSet.StringVar(&oidcClientSecret, "oidc-client-secret", "", "OIDC client secret")
+	flagSet.StringVar(&oidcRedirectURI, "oidc-redirect-uri", "", "OIDC redirect URI")
 
 	if err := ff.Parse(flagSet, os.Args[1:], ff.WithEnvVars()); err != nil {
 		slog.Error("failed to parse flags", "error", err)
@@ -40,7 +54,7 @@ func main() {
 	}
 
 	// Database
-	db, err := store.Open(*dbPath)
+	db, err := store.Open(dbPath)
 	if err != nil {
 		slog.Error("failed to open database", "error", err)
 		os.Exit(1)
@@ -55,25 +69,25 @@ func main() {
 	sessionStore := store.NewSessionStore(db)
 
 	// OIDC configuration
-	if *oidcIssuer == "" || *oidcClientID == "" || *oidcClientSecret == "" || *oidcRedirectURI == "" {
+	if oidcIssuer == "" || oidcClientID == "" || oidcClientSecret == "" || oidcRedirectURI == "" {
 		slog.Error("oidc-issuer, oidc-client-id, oidc-client-secret, and oidc-redirect-uri must be set (via flags or env vars OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URI)")
 		os.Exit(1)
 	}
 
-	oidcProvider, err := api.SetupOIDCProvider(context.Background(), *oidcIssuer)
+	oidcProvider, err := api.SetupOIDCProvider(context.Background(), oidcIssuer)
 	if err != nil {
 		slog.Error("OIDC discovery failed", "error", err)
 		os.Exit(1)
 	}
 
 	oidcConfig := &api.OIDCConfig{
-		Issuer:       *oidcIssuer,
-		ClientID:     *oidcClientID,
-		ClientSecret: *oidcClientSecret,
-		RedirectURI:  *oidcRedirectURI,
+		Issuer:       oidcIssuer,
+		ClientID:     oidcClientID,
+		ClientSecret: oidcClientSecret,
+		RedirectURI:  oidcRedirectURI,
 	}
 
-	slog.Info("OIDC configured", "issuer", *oidcIssuer)
+	slog.Info("OIDC configured", "issuer", oidcIssuer)
 
 	// HN client
 	hnClient := hn.NewClient()
@@ -133,9 +147,9 @@ func main() {
 
 	// Static file serving: embedded FS by default, filesystem override with -static-dir flag
 	var staticFS fs.FS
-	if *staticDir != "" {
-		slog.Info("serving static files from filesystem", "dir", *staticDir)
-		staticFS = os.DirFS(*staticDir)
+	if staticDir != "" {
+		slog.Info("serving static files from filesystem", "dir", staticDir)
+		staticFS = os.DirFS(staticDir)
 	} else {
 		sub, err := fs.Sub(staticFiles, "static")
 		if err != nil {
@@ -149,15 +163,15 @@ func main() {
 	mux.HandleFunc("/", api.NewStaticHandler(staticFS))
 
 	// HTTP server with graceful shutdown
-	addr := ":8080"
+	listenAddr := fmt.Sprintf("%s:%d", addr, port)
 	srv := &http.Server{
-		Addr:    addr,
+		Addr:    listenAddr,
 		Handler: mux,
 	}
 
 	// Start server in a goroutine
 	go func() {
-		slog.Info("server starting", "addr", addr)
+		slog.Info("server starting", "addr", listenAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
