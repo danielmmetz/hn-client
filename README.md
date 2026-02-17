@@ -138,13 +138,23 @@ Note: `children` may be `null` (not just empty array) when a comment has no repl
 
 ### Database Schema
 
-Five tables: `stories`, `comments`, `articles`, `rankings`, `sessions`. See `store/db.go` for the full schema and migrations. Key points:
+Five tables: `stories`, `comments`, `articles`, `rankings`, `sessions`. The schema is defined in `store/sqlc/schema.sql` and applied via migrations in `store/db.go`. Key points:
 
 - **stories** — keyed by HN item ID, includes `rank` (front-page position, NULL when off front page) and `fetched_at`
 - **comments** — keyed by HN item ID, indexed on `story_id`, tracks `parent_id` for tree structure
 - **articles** — keyed by `story_id`, stores reader-mode HTML + metadata, `extraction_failed` flag
 - **rankings** — composite key `(story_id, period)`, indexed on `(period, score DESC)` for efficient period queries
 - **sessions** — OIDC session storage, keyed by token, with user info and expiry
+
+### SQL Queries (sqlc)
+
+All SQL queries are managed with [sqlc](https://sqlc.dev/). Query definitions (`*.sql`), the schema (`schema.sql`), and the generated Go code all live together in `store/`. The generated types and query methods are used directly by API handlers and workers — `db` and `tx` handles are passed at each call site via `emit_methods_with_db_argument`. Hand-written Go is limited to `SwapRanks` (atomic rank transaction), `GetCommentTree` (nested tree building), and the `Nullable` helper for `sql.ErrNoRows` → nil conversion. Cascade deletes are handled by SQLite `ON DELETE CASCADE` foreign keys. The schema is embedded via `//go:embed` and used directly for migrations — no duplicate DDL.
+
+To regenerate after changing queries or schema:
+
+```
+cd server && go tool sqlc generate
+```
 
 ### Routing
 
@@ -209,13 +219,17 @@ hn-client/
 │   ├── readability/
 │   │   └── extract.go          # go-readability wrapper
 │   ├── store/
-│   │   ├── db.go               # SQLite setup, schema, migrations
-│   │   ├── stories.go          # Story queries
-│   │   ├── comments.go         # Comment queries
-│   │   ├── articles.go         # Article queries
-│   │   ├── rankings.go         # Ranking queries
-│   │   ├── sessions.go         # Session CRUD for OIDC auth
-│   │   └── toplist.go          # Thread-safe ordered top story ID list
+│   │   ├── schema.sql          # DDL schema (embedded for migrations + sqlc)
+│   │   ├── db.go               # SQLite setup (embeds schema.sql), Nullable helper
+│   │   ├── stories.go/.sql     # SQL queries + SwapRanks transaction
+│   │   ├── comments.go/.sql    # SQL queries + comment tree building (CommentNode)
+│   │   ├── articles.sql        # SQL queries (no hand-written Go needed)
+│   │   ├── rankings.sql        # SQL queries (no hand-written Go needed)
+│   │   ├── sessions.sql        # SQL queries (no hand-written Go needed)
+│   │   ├── toplist.go          # Thread-safe ordered top story ID list
+│   │   ├── models.go           # Generated types (sqlc, do not edit)
+│   │   ├── sqlc.go             # Generated DBTX/Queries (sqlc, do not edit)
+│   │   └── *.sql.go            # Generated query methods (sqlc, do not edit)
 │   ├── sse/
 │   │   └── broker.go           # SSE manager, ring buffer, Last-Event-ID replay
 │   └── static/                 # Vite build output (embedded into binary)
@@ -267,5 +281,6 @@ hn-client/
 - **Service Worker doesn't touch API data** — All API caching is in the app layer via IndexedDB. This avoids SW/main-thread race conditions over IndexedDB.
 - **Client-side only stars** — Stars live in IndexedDB, not on the server. Clearing browser data loses them.
 - **Single binary deployment** — Client build is embedded via `//go:embed static/*`. One binary, no file dependencies.
+- **sqlc for type-safe SQL** — Queries are plain SQL; `go tool sqlc generate` produces type-safe Go. Column type overrides map SQLite integers to `int` and nullable columns to Go pointers. The generated types are used directly — no wrapper structs or conversion code. Schema is defined once in `schema.sql`, embedded for both sqlc codegen and runtime migrations.
 - **ETags on all JSON responses** — Shared `writeJSON` helper (in `stories.go`) hashes response bodies for conditional request support (304 Not Modified). Used by all API handlers.
 - **SSE with ring buffer** — Last 1000 events buffered for `Last-Event-ID` reconnection. Clients too far behind get `sync_required` to trigger a full re-fetch.

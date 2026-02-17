@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -10,13 +11,13 @@ import (
 )
 
 type ArticlesHandler struct {
-	articles *store.ArticleStore
-	stories  *store.StoryStore
-	fetcher  *worker.Fetcher
+	db      *sql.DB
+	q       *store.Queries
+	fetcher *worker.Fetcher
 }
 
-func NewArticlesHandler(articles *store.ArticleStore, stories *store.StoryStore, fetcher *worker.Fetcher) *ArticlesHandler {
-	return &ArticlesHandler{articles: articles, stories: stories, fetcher: fetcher}
+func NewArticlesHandler(db *sql.DB, q *store.Queries, fetcher *worker.Fetcher) *ArticlesHandler {
+	return &ArticlesHandler{db: db, q: q, fetcher: fetcher}
 }
 
 // GetArticle handles GET /api/stories/{id}/article
@@ -29,19 +30,18 @@ func (h *ArticlesHandler) GetArticle(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if story exists (fetch on-demand if needed)
-	story, err := h.stories.GetByID(ctx, id)
+	story, err := store.Nullable(h.q.GetStoryByID(ctx, h.db, id))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	if story == nil {
-		// Try to fetch the story on-demand
 		if fetchErr := h.fetcher.FetchStorySingleflight(ctx, id); fetchErr != nil {
 			slog.Error("on-demand story fetch for article failed", "story_id", id, "error", fetchErr)
 			http.Error(w, "story not found", http.StatusNotFound)
 			return
 		}
-		story, err = h.stories.GetByID(ctx, id)
+		story, err = store.Nullable(h.q.GetStoryByID(ctx, h.db, id))
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -57,7 +57,7 @@ func (h *ArticlesHandler) GetArticle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	article, err := h.articles.GetByStoryID(ctx, id)
+	article, err := store.Nullable(h.q.GetArticleByStoryID(ctx, h.db, id))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -68,8 +68,7 @@ func (h *ArticlesHandler) GetArticle(w http.ResponseWriter, r *http.Request) {
 		slog.Info("on-demand article extraction", "story_id", id)
 		h.fetcher.ExtractArticleSingleflight(ctx, id, *story.URL)
 
-		// Reload from DB
-		article, err = h.articles.GetByStoryID(ctx, id)
+		article, err = store.Nullable(h.q.GetArticleByStoryID(ctx, h.db, id))
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return

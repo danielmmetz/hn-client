@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -25,20 +26,20 @@ const (
 type RefreshHandler struct {
 	fetcher  *worker.Fetcher
 	hnClient *hn.Client
-	stories  *store.StoryStore
-	articles *store.ArticleStore
+	db       *sql.DB
+	q        *store.Queries
 	broker   *sse.Broker
 
 	mu        sync.Mutex
-	lastFetch map[int]time.Time // rate limit tracking (bounded with TTL eviction)
+	lastFetch map[int]time.Time
 }
 
-func NewRefreshHandler(fetcher *worker.Fetcher, hnClient *hn.Client, stories *store.StoryStore, articles *store.ArticleStore, broker *sse.Broker) *RefreshHandler {
+func NewRefreshHandler(fetcher *worker.Fetcher, hnClient *hn.Client, db *sql.DB, q *store.Queries, broker *sse.Broker) *RefreshHandler {
 	return &RefreshHandler{
 		fetcher:   fetcher,
 		hnClient:  hnClient,
-		stories:   stories,
-		articles:  articles,
+		db:        db,
+		q:         q,
 		broker:    broker,
 		lastFetch: make(map[int]time.Time),
 	}
@@ -52,11 +53,9 @@ func (h *RefreshHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rate limit: 1 request per story per 30 seconds (with periodic eviction)
 	h.mu.Lock()
 	now := time.Now()
 
-	// Evict stale entries when map gets large
 	if len(h.lastFetch) > rateLimitCapacity {
 		h.sweepLocked(now)
 	}
@@ -71,7 +70,6 @@ func (h *RefreshHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 	reExtract := r.URL.Query().Get("article") == "true"
 
-	// Return 202 immediately, do work in background
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -79,11 +77,9 @@ func (h *RefreshHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		"story_id": id,
 	})
 
-	// Background work uses a detached context (not tied to the request)
 	go h.doRefresh(context.Background(), id, reExtract)
 }
 
-// sweepLocked removes entries older than rateLimitSweepAge. Must be called with h.mu held.
 func (h *RefreshHandler) sweepLocked(now time.Time) {
 	for id, t := range h.lastFetch {
 		if now.Sub(t) > rateLimitSweepAge {
@@ -93,15 +89,13 @@ func (h *RefreshHandler) sweepLocked(now time.Time) {
 }
 
 func (h *RefreshHandler) doRefresh(ctx context.Context, id int, reExtract bool) {
-	// Fetch story + comments (handles unknown stories on-demand)
 	if err := h.fetcher.FetchStoryWithComments(ctx, id, nil); err != nil {
 		slog.Error("refresh: error fetching story", "story_id", id, "error", err)
 		return
 	}
 
-	// Re-extract article if requested
 	if reExtract {
-		story, err := h.stories.GetByID(ctx, id)
+		story, err := store.Nullable(h.q.GetStoryByID(ctx, h.db, id))
 		if err != nil || story == nil {
 			slog.Warn("refresh: cannot find story for article extraction", "story_id", id)
 		} else if story.URL != nil {
@@ -109,7 +103,6 @@ func (h *RefreshHandler) doRefresh(ctx context.Context, id int, reExtract bool) 
 		}
 	}
 
-	// Publish SSE events
 	now := time.Now().Unix()
 	data, _ := json.Marshal(map[string]interface{}{
 		"story_id":  id,
@@ -125,11 +118,11 @@ func (h *RefreshHandler) doRefresh(ctx context.Context, id int, reExtract bool) 
 }
 
 func (h *RefreshHandler) extractArticle(ctx context.Context, storyID int, url string) {
-	now := store.NowUnix()
+	now := time.Now().Unix()
 	article, err := readability.Extract(ctx, url)
 	if err != nil {
 		slog.Error("refresh: article extraction failed", "story_id", storyID, "error", err)
-		h.articles.Upsert(ctx, &store.Article{
+		h.q.UpsertArticle(ctx, h.db, store.UpsertArticleParams{
 			StoryID:          storyID,
 			ExtractionFailed: true,
 			FetchedAt:        now,
@@ -137,7 +130,7 @@ func (h *RefreshHandler) extractArticle(ctx context.Context, storyID int, url st
 		return
 	}
 
-	h.articles.Upsert(ctx, &store.Article{
+	h.q.UpsertArticle(ctx, h.db, store.UpsertArticleParams{
 		StoryID:          storyID,
 		Content:          &article.Content,
 		Title:            &article.Title,

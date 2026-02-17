@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"time"
@@ -13,10 +14,8 @@ import (
 
 type Poller struct {
 	client   *hn.Client
-	stories  *store.StoryStore
-	comments *store.CommentStore
-	articles *store.ArticleStore
-	rankings *store.RankingStore
+	db       *sql.DB
+	q        *store.Queries
 	fetcher  *Fetcher
 	ranker   *Ranker
 	broker   *sse.Broker
@@ -24,15 +23,12 @@ type Poller struct {
 	interval time.Duration
 }
 
-// NewPoller creates a Poller with an externally-provided Fetcher (dependency injection).
-func NewPoller(client *hn.Client, fetcher *Fetcher, stories *store.StoryStore, comments *store.CommentStore, articles *store.ArticleStore, rankings *store.RankingStore, broker *sse.Broker, topList *store.TopList) *Poller {
-	ranker := NewRanker(stories, rankings)
+func NewPoller(client *hn.Client, fetcher *Fetcher, db *sql.DB, q *store.Queries, broker *sse.Broker, topList *store.TopList) *Poller {
+	ranker := NewRanker(db, q)
 	return &Poller{
 		client:   client,
-		stories:  stories,
-		comments: comments,
-		articles: articles,
-		rankings: rankings,
+		db:       db,
+		q:        q,
 		fetcher:  fetcher,
 		ranker:   ranker,
 		broker:   broker,
@@ -74,7 +70,6 @@ func (p *Poller) poll(ctx context.Context) {
 	slog.Info("TopList updated", "count", len(topIDs))
 
 	// Phase 1: Fetch all story data WITHOUT setting ranks.
-	// Accumulate (storyID, rank) pairs in memory for atomic swap later.
 	var rankPairs []store.RankPair
 	var updatedIDs []int
 
@@ -85,7 +80,6 @@ func (p *Poller) poll(ctx context.Context) {
 	}
 
 	for i := 0; i < eagerCount; i++ {
-		// Check for cancellation between stories
 		if ctx.Err() != nil {
 			slog.Info("poller: cancelled during eager fetch")
 			return
@@ -114,10 +108,9 @@ func (p *Poller) poll(ctx context.Context) {
 		updatedIDs = append(updatedIDs, id)
 	}
 
-	// Phase 2: Atomic rank swap — only if we fetched enough stories.
-	// Require at least 10 stories to avoid wiping ranks on a mostly-failed poll.
+	// Phase 2: Atomic rank swap
 	if len(rankPairs) >= 10 {
-		if err := p.stories.SwapRanks(ctx, rankPairs); err != nil {
+		if err := store.SwapRanks(ctx, p.db, p.q, rankPairs); err != nil {
 			slog.Error("error swapping ranks", "error", err)
 		}
 	} else {

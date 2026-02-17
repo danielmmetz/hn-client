@@ -4,8 +4,8 @@ import (
 	"context"
 	"embed"
 	"flag"
-	"io/fs"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -61,12 +61,7 @@ func main() {
 	}
 	defer db.Close()
 
-	// Stores
-	storyStore := store.NewStoryStore(db)
-	commentStore := store.NewCommentStore(db)
-	articleStore := store.NewArticleStore(db)
-	rankingStore := store.NewRankingStore(db)
-	sessionStore := store.NewSessionStore(db)
+	q := store.New()
 
 	// OIDC configuration
 	if oidcIssuer == "" || oidcClientID == "" || oidcClientSecret == "" || oidcRedirectURI == "" {
@@ -98,31 +93,31 @@ func main() {
 	// Shared TopList for pagination
 	topList := store.NewTopList()
 
-	// Fetcher: created externally and injected into both Poller and API handlers
-	fetcher := worker.NewFetcher(hnClient, storyStore, commentStore, articleStore)
+	// Fetcher
+	fetcher := worker.NewFetcher(hnClient, db, q)
 
-	// Background worker context — cancelled on shutdown to stop all goroutines
+	// Background worker context
 	workerCtx, workerCancel := context.WithCancel(context.Background())
 
-	// Background poller (with article extraction and ranking computation)
-	poller := worker.NewPoller(hnClient, fetcher, storyStore, commentStore, articleStore, rankingStore, broker, topList)
+	// Background poller
+	poller := worker.NewPoller(hnClient, fetcher, db, q, broker, topList)
 	poller.Start(workerCtx)
 
 	// Daily cleanup
-	cleaner := worker.NewCleaner(storyStore)
+	cleaner := worker.NewCleaner(db, q)
 	cleaner.Start(workerCtx)
 
 	// API handlers
-	storiesHandler := api.NewStoriesHandler(storyStore, rankingStore, topList, fetcher)
-	commentsHandler := api.NewCommentsHandler(commentStore, storyStore, fetcher, hnClient)
-	articlesHandler := api.NewArticlesHandler(articleStore, storyStore, fetcher)
-	refreshHandler := api.NewRefreshHandler(fetcher, hnClient, storyStore, articleStore, broker)
-	healthHandler := api.NewHealthHandler(storyStore)
-	authHandler := api.NewAuthHandler(oidcProvider, oidcConfig, sessionStore)
+	storiesHandler := api.NewStoriesHandler(db, q, topList, fetcher)
+	commentsHandler := api.NewCommentsHandler(db, q, fetcher, hnClient)
+	articlesHandler := api.NewArticlesHandler(db, q, fetcher)
+	refreshHandler := api.NewRefreshHandler(fetcher, hnClient, db, q, broker)
+	healthHandler := api.NewHealthHandler(db, q)
+	authHandler := api.NewAuthHandler(oidcProvider, oidcConfig, db, q)
 
 	// Auth helper
 	requireAuth := func(hf http.HandlerFunc) http.Handler {
-		return api.RequireAuthFunc(sessionStore, hf)
+		return api.RequireAuthFunc(db, q, hf)
 	}
 
 	// Routes
@@ -142,10 +137,10 @@ func main() {
 	mux.Handle("POST /api/stories/{id}/refresh", requireAuth(refreshHandler.Refresh))
 	mux.Handle("GET /api/stories/{id}", requireAuth(storiesHandler.GetStory))
 	mux.Handle("GET /api/stories", requireAuth(storiesHandler.ListStories))
-	mux.Handle("GET /api/health", api.RequireAuth(sessionStore, healthHandler))
-	mux.Handle("GET /api/events", api.RequireAuth(sessionStore, broker))
+	mux.Handle("GET /api/health", api.RequireAuth(db, q, healthHandler))
+	mux.Handle("GET /api/events", api.RequireAuth(db, q, broker))
 
-	// Static file serving: embedded FS by default, filesystem override with -static-dir flag
+	// Static file serving
 	var staticFS fs.FS
 	if staticDir != "" {
 		slog.Info("serving static files from filesystem", "dir", staticDir)
@@ -169,7 +164,6 @@ func main() {
 		Handler: mux,
 	}
 
-	// Start server in a goroutine
 	go func() {
 		slog.Info("server starting", "addr", listenAddr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -178,16 +172,13 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 	slog.Info("received signal, shutting down", "signal", sig)
 
-	// Cancel background workers first
 	workerCancel()
 
-	// Gracefully shut down HTTP server (waits for in-flight requests, including SSE)
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 

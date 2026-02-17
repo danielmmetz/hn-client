@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"time"
 
@@ -9,17 +10,17 @@ import (
 )
 
 type Cleaner struct {
-	stories *store.StoryStore
+	db *sql.DB
+	q  *store.Queries
 }
 
-func NewCleaner(stories *store.StoryStore) *Cleaner {
-	return &Cleaner{stories: stories}
+func NewCleaner(db *sql.DB, q *store.Queries) *Cleaner {
+	return &Cleaner{db: db, q: q}
 }
 
 // Start begins the daily cleanup cycle. It runs until the context is cancelled.
 func (c *Cleaner) Start(ctx context.Context) {
 	go func() {
-		// Run first cleanup after 1 hour (let data accumulate on startup)
 		select {
 		case <-time.After(1 * time.Hour):
 			c.cleanup(ctx)
@@ -45,7 +46,8 @@ func (c *Cleaner) Start(ctx context.Context) {
 func (c *Cleaner) cleanup(ctx context.Context) {
 	slog.Info("cleaner: starting daily cleanup")
 
-	ids, err := c.stories.OldOffPageStories(ctx)
+	cutoff := time.Now().Add(-30 * 24 * time.Hour).Unix()
+	ids, err := c.q.OldOffPageStoryIDs(ctx, c.db, cutoff)
 	if err != nil {
 		slog.Error("cleaner: error finding old stories", "error", err)
 		return
@@ -57,7 +59,7 @@ func (c *Cleaner) cleanup(ctx context.Context) {
 			slog.Info("cleaner: cancelled during cleanup")
 			break
 		}
-		if err := c.stories.DeleteStory(ctx, id); err != nil {
+		if err := c.q.DeleteStory(ctx, c.db, id); err != nil {
 			slog.Error("cleaner: error deleting story", "story_id", id, "error", err)
 			continue
 		}
@@ -66,7 +68,7 @@ func (c *Cleaner) cleanup(ctx context.Context) {
 
 	if deleted > 0 {
 		slog.Info("cleaner: deleted old stories", "count", deleted)
-		if err := c.stories.Vacuum(); err != nil {
+		if _, err := c.db.Exec(`VACUUM`); err != nil {
 			slog.Error("cleaner: vacuum error", "error", err)
 		}
 	}

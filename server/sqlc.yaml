@@ -1,0 +1,48 @@
+version: "2"
+sql:
+  - engine: "sqlite"
+    queries: "store"
+    schema: "store/schema.sql"
+    gen:
+      go:
+        package: "store"
+        out: "store"
+        output_db_file_name: "sqlc.go"
+        emit_json_tags: true
+        emit_empty_slices: true
+        emit_pointers_for_null_types: true
+        emit_result_struct_pointers: true
+        emit_interface: false
+        emit_methods_with_db_argument: true
+        json_tags_case_style: "snake"
+        rename:
+          url: "URL"
+        overrides:
+          - db_type: "integer"
+            go_type: "int"
+          - db_type: "INTEGER"
+            go_type: "int"
+          - db_type: "integer"
+            go_type:
+              type: "int"
+              pointer: true
+            nullable: true
+          - db_type: "INTEGER"
+            go_type:
+              type: "int"
+              pointer: true
+            nullable: true
+          - column: "stories.time"
+            go_type: "int64"
+          - column: "stories.fetched_at"
+            go_type: "int64"
+          - column: "comments.time"
+            go_type: "int64"
+          - column: "comments.fetched_at"
+            go_type: "int64"
+          - column: "articles.fetched_at"
+            go_type: "int64"
+          - column: "rankings.computed_at"
+            go_type: "int64"
+          - column: "sessions.expires_at"
+            go_type: "int64"

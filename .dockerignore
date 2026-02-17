@@ -1,0 +1,13 @@
+.git
+.pi
+.env
+.env.*
+!.env.example
+client/node_modules
+server/hn-server
+server/hn.db
+server/hn.db-shm
+server/hn.db-wal
+server/static
+hn-server
+README.md

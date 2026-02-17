@@ -2,6 +2,7 @@ package api
 
 import (
 	"crypto/md5"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -13,14 +14,14 @@ import (
 )
 
 type StoriesHandler struct {
-	stories  *store.StoryStore
-	rankings *store.RankingStore
-	topList  *store.TopList
-	fetcher  *worker.Fetcher
+	db      *sql.DB
+	q       *store.Queries
+	topList *store.TopList
+	fetcher *worker.Fetcher
 }
 
-func NewStoriesHandler(stories *store.StoryStore, rankings *store.RankingStore, topList *store.TopList, fetcher *worker.Fetcher) *StoriesHandler {
-	return &StoriesHandler{stories: stories, rankings: rankings, topList: topList, fetcher: fetcher}
+func NewStoriesHandler(db *sql.DB, q *store.Queries, topList *store.TopList, fetcher *worker.Fetcher) *StoriesHandler {
+	return &StoriesHandler{db: db, q: q, topList: topList, fetcher: fetcher}
 }
 
 // ListStories handles GET /api/stories?page=N
@@ -43,20 +44,28 @@ func (h *StoriesHandler) ListStories(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fallback: TopList not yet populated, use rank-based query
-	stories, total, err := h.stories.ListByRank(ctx, page)
+	totalCount, err := h.q.CountRankedStories(ctx, h.db)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	stories, err := h.q.ListStoriesByRank(ctx, h.db, store.ListStoriesByRankParams{
+		Limit: pageSize, Offset: (page - 1) * pageSize,
+	})
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	if stories == nil {
-		stories = []store.Story{}
+		stories = []*store.Story{}
 	}
 
 	resp := map[string]interface{}{
 		"stories":  stories,
 		"page":     page,
-		"total":    total,
+		"total":    totalCount,
 		"complete": true,
 	}
 
@@ -68,10 +77,15 @@ func (h *StoriesHandler) serveFromTopList(w http.ResponseWriter, r *http.Request
 	ctx := r.Context()
 
 	// Batch-load from DB
-	storyMap, err := h.stories.GetByIDs(ctx, pageIDs)
+	rows, err := h.q.GetStoriesByIDs(ctx, h.db, pageIDs)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+
+	storyMap := make(map[int]*store.Story, len(rows))
+	for _, st := range rows {
+		storyMap[st.ID] = st
 	}
 
 	// Find missing IDs and fetch on-demand (metadata only)
@@ -81,8 +95,7 @@ func (h *StoriesHandler) serveFromTopList(w http.ResponseWriter, r *http.Request
 				slog.Error("on-demand fetch failed", "story_id", id, "error", fetchErr)
 				continue
 			}
-			// Reload from DB
-			if st, getErr := h.stories.GetByID(ctx, id); getErr == nil && st != nil {
+			if st, getErr := store.Nullable(h.q.GetStoryByID(ctx, h.db, id)); getErr == nil && st != nil {
 				storyMap[st.ID] = st
 			}
 		}
@@ -90,13 +103,12 @@ func (h *StoriesHandler) serveFromTopList(w http.ResponseWriter, r *http.Request
 
 	// Build ordered result
 	pageSize := 30
-	stories := make([]store.Story, 0, len(pageIDs))
+	stories := make([]*store.Story, 0, len(pageIDs))
 	for i, id := range pageIDs {
 		if st, ok := storyMap[id]; ok {
-			// Set rank for client-side display
 			rank := (page-1)*pageSize + i + 1
 			st.Rank = &rank
-			stories = append(stories, *st)
+			stories = append(stories, st)
 		}
 	}
 
@@ -119,20 +131,19 @@ func (h *StoriesHandler) GetStory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	story, err := h.stories.GetByID(ctx, id)
+	story, err := store.Nullable(h.q.GetStoryByID(ctx, h.db, id))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	// On-demand fetch if not in DB
 	if story == nil {
 		if fetchErr := h.fetcher.FetchStorySingleflight(ctx, id); fetchErr != nil {
 			slog.Error("on-demand fetch failed", "story_id", id, "error", fetchErr)
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		story, err = h.stories.GetByID(ctx, id)
+		story, err = store.Nullable(h.q.GetStoryByID(ctx, h.db, id))
 		if err != nil {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
@@ -164,14 +175,24 @@ func (h *StoriesHandler) TopStories(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	stories, total, err := h.rankings.GetByPeriod(ctx, period, page)
+	pageSize := 30
+
+	total, err := h.q.CountRankingsByPeriod(ctx, h.db, period)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	stories, err := h.q.GetStoriesByPeriod(ctx, h.db, store.GetStoriesByPeriodParams{
+		Period: period, Limit: pageSize, Offset: (page - 1) * pageSize,
+	})
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	if stories == nil {
-		stories = []store.Story{}
+		stories = []*store.Story{}
 	}
 
 	resp := map[string]interface{}{

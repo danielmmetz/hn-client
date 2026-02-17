@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"log/slog"
@@ -35,11 +36,12 @@ type AuthHandler struct {
 	provider     *oidc.Provider
 	verifier     *oidc.IDTokenVerifier
 	oauth2Config oauth2.Config
-	sessionStore *store.SessionStore
+	db           *sql.DB
+	q            *store.Queries
 }
 
 // NewAuthHandler creates an AuthHandler using go-oidc for discovery and token verification.
-func NewAuthHandler(provider *oidc.Provider, cfg *OIDCConfig, sessionStore *store.SessionStore) *AuthHandler {
+func NewAuthHandler(provider *oidc.Provider, cfg *OIDCConfig, db *sql.DB, q *store.Queries) *AuthHandler {
 	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.ClientID})
 
 	oauth2Config := oauth2.Config{
@@ -54,7 +56,8 @@ func NewAuthHandler(provider *oidc.Provider, cfg *OIDCConfig, sessionStore *stor
 		provider:     provider,
 		verifier:     verifier,
 		oauth2Config: oauth2Config,
-		sessionStore: sessionStore,
+		db:           db,
+		q:            q,
 	}
 }
 
@@ -68,28 +71,24 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	state := randomString(32)
 	verifier := randomString(pkceVerifierLen)
 
-	// Store state + verifier in a cookie
 	stateData := state + "|" + verifier
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    stateData,
 		Path:     "/api/auth",
-		MaxAge:   600, // 10 minutes
+		MaxAge:   600,
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	// PKCE challenge
 	challenge := oauth2.S256ChallengeOption(verifier)
-
 	url := h.oauth2Config.AuthCodeURL(state, challenge)
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
 // Callback handles the OIDC authorization code callback.
 func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
-	// Check for error from provider
 	if errParam := r.URL.Query().Get("error"); errParam != "" {
 		desc := r.URL.Query().Get("error_description")
 		http.Error(w, "OAuth error: "+errParam+" — "+desc, http.StatusBadRequest)
@@ -103,7 +102,6 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Retrieve and validate state cookie
 	cookie, err := r.Cookie(stateCookieName)
 	if err != nil {
 		http.Error(w, "missing state cookie", http.StatusBadRequest)
@@ -116,7 +114,6 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	verifier := parts[1]
 
-	// Clear state cookie
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    "",
@@ -127,7 +124,6 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	// Exchange code for tokens (with PKCE verifier)
 	oauth2Token, err := h.oauth2Config.Exchange(r.Context(), code, oauth2.VerifierOption(verifier))
 	if err != nil {
 		slog.Error("token exchange failed", "error", err)
@@ -135,7 +131,6 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract and verify ID token
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
 		http.Error(w, "no id_token in response", http.StatusInternalServerError)
@@ -149,7 +144,6 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract claims
 	var claims struct {
 		Sub               string `json:"sub"`
 		Name              string `json:"name"`
@@ -168,7 +162,6 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build user info JSON
 	userInfo := map[string]interface{}{
 		"sub":   claims.Sub,
 		"name":  claims.Name,
@@ -182,11 +175,10 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	}
 	userInfoJSON, _ := json.Marshal(userInfo)
 
-	// Create session
 	sessionToken := randomString(48)
 	expiresAt := time.Now().Unix() + sessionMaxAge
 
-	if err := h.sessionStore.Create(r.Context(), &store.Session{
+	if err := h.q.CreateSession(r.Context(), h.db, store.CreateSessionParams{
 		Token:     sessionToken,
 		UserSub:   claims.Sub,
 		UserInfo:  string(userInfoJSON),
@@ -218,7 +210,9 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sess, err := h.sessionStore.Get(r.Context(), cookie.Value)
+	sess, err := store.Nullable(h.q.GetSession(r.Context(), h.db, store.GetSessionParams{
+		Token: cookie.Value, ExpiresAt: time.Now().Unix(),
+	}))
 	if err != nil || sess == nil {
 		http.Error(w, "not authenticated", http.StatusUnauthorized)
 		return
@@ -232,7 +226,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err == nil {
-		h.sessionStore.Delete(r.Context(), cookie.Value)
+		h.q.DeleteSession(r.Context(), h.db, cookie.Value)
 	}
 
 	http.SetCookie(w, &http.Cookie{

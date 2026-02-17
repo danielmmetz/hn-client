@@ -1,24 +1,29 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 
 	"github.com/danielmmetz/hn-client/server/store"
 )
 
 type HealthHandler struct {
-	stories *store.StoryStore
+	db *sql.DB
+	q  *store.Queries
 }
 
-func NewHealthHandler(stories *store.StoryStore) *HealthHandler {
-	return &HealthHandler{stories: stories}
+func NewHealthHandler(db *sql.DB, q *store.Queries) *HealthHandler {
+	return &HealthHandler{db: db, q: q}
 }
 
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	count, _ := h.q.CountStories(r.Context(), h.db)
+	maxFetched, _ := h.q.MaxFetchedAt(r.Context(), h.db)
+
 	resp := map[string]interface{}{
 		"status":        "ok",
-		"stories_count": h.stories.Count(),
-		"last_poll":     h.stories.LastPollTime(),
+		"stories_count": count,
+		"last_poll":     maxFetched,
 	}
 	writeJSON(w, r, resp)
 }
