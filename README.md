@@ -2,7 +2,7 @@
 
 **Subway-compatible Hacker News.** The idea is simple: you open the app before going underground, and it already has everything you need. The server proactively fetches top stories, their full comment trees, and reader-mode article extractions on a 5-minute cycle. The client prefetches this data into IndexedDB so that stories, articles, and comments are all available offline — no loading spinners, no "connect to read more." When you resurface, it syncs up quietly via SSE.
 
-A mobile-first PWA with a Go+SQLite caching backend. The server proxies and caches HN data (stories, comments, reader-mode article extractions), provides alternative ranking APIs (top of day/week), and streams updates to clients over SSE. Authentication is handled via OIDC. The client uses Preact, IndexedDB for offline storage, and a Service Worker for app shell caching.
+A mobile-first PWA with a Go+SQLite caching backend. The server proxies and caches HN data (stories, comments, reader-mode article extractions), provides alternative ranking APIs (top of day/week), and streams updates to clients over SSE. Authentication via OIDC is available but optional — controlled by the `-require-auth` flag. The client uses Preact, IndexedDB for offline storage, and a Service Worker for app shell caching.
 
 ---
 
@@ -86,13 +86,25 @@ All mutations push events to **SSE subscribers** with monotonic IDs. A ring buff
 
 ### Authentication
 
-All API endpoints (except auth routes and static assets) require authentication. The server uses OIDC (via `go-oidc`) with PKCE. Sessions are stored server-side in SQLite with a 30-day max age.
+Authentication is **optional**, controlled by the `-require-auth` flag (or `REQUIRE_AUTH=true` env var). When enabled, all API endpoints (except auth routes and static assets) require a valid session. The server uses OIDC (via `go-oidc`) with PKCE. Sessions are stored server-side in SQLite with a 30-day max age.
+
+When `-require-auth` is enabled, the OIDC flags are required:
+
+| Flag | Env Var | Description |
+|---|---|---|
+| `-require-auth` | `REQUIRE_AUTH` | Enable OIDC authentication (default: `false`) |
+| `-oidc-issuer` | `OIDC_ISSUER` | OIDC issuer URL |
+| `-oidc-client-id` | `OIDC_CLIENT_ID` | OIDC client ID |
+| `-oidc-client-secret` | `OIDC_CLIENT_SECRET` | OIDC client secret |
+| `-oidc-redirect-uri` | `OIDC_REDIRECT_URI` | OIDC redirect URI |
+
+When auth is disabled (the default), API routes are open and `/api/auth/me` returns a dummy anonymous user so the frontend works without a login gate.
 
 | Endpoint | Description |
 |---|---|
 | `GET /api/auth/login` | Initiates OIDC login flow (redirects to provider) |
 | `GET /api/auth/callback` | OIDC callback, creates session, sets `hn_session` cookie |
-| `GET /api/auth/me` | Returns current user info from session |
+| `GET /api/auth/me` | Returns current user info from session (or anonymous when auth disabled) |
 | `POST /api/auth/logout` | Destroys session |
 
 ### API

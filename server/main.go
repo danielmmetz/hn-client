@@ -34,6 +34,7 @@ func main() {
 		port             int
 		staticDir        string
 		dbPath           string
+		requireAuthFlag  bool
 		oidcIssuer       string
 		oidcClientID     string
 		oidcClientSecret string
@@ -43,6 +44,7 @@ func main() {
 	flagSet.IntVar(&port, "port", 8080, "Port to listen on")
 	flagSet.StringVar(&staticDir, "static-dir", "", "Path to static files directory (default: use embedded files)")
 	flagSet.StringVar(&dbPath, "db-path", "hn.db", "Path to SQLite database file")
+	flagSet.BoolVar(&requireAuthFlag, "require-auth", false, "Require OIDC authentication for API routes")
 	flagSet.StringVar(&oidcIssuer, "oidc-issuer", "", "OIDC issuer URL")
 	flagSet.StringVar(&oidcClientID, "oidc-client-id", "", "OIDC client ID")
 	flagSet.StringVar(&oidcClientSecret, "oidc-client-secret", "", "OIDC client secret")
@@ -63,26 +65,32 @@ func main() {
 
 	q := store.New()
 
-	// OIDC configuration
-	if oidcIssuer == "" || oidcClientID == "" || oidcClientSecret == "" || oidcRedirectURI == "" {
-		slog.Error("oidc-issuer, oidc-client-id, oidc-client-secret, and oidc-redirect-uri must be set (via flags or env vars OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URI)")
-		os.Exit(1)
-	}
+	// OIDC state — only populated when auth is required
+	var authHandler *api.AuthHandler
+	if requireAuthFlag {
+		if oidcIssuer == "" || oidcClientID == "" || oidcClientSecret == "" || oidcRedirectURI == "" {
+			slog.Error("oidc-issuer, oidc-client-id, oidc-client-secret, and oidc-redirect-uri must be set when -require-auth is enabled (via flags or env vars OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URI)")
+			os.Exit(1)
+		}
 
-	oidcProvider, err := api.SetupOIDCProvider(context.Background(), oidcIssuer)
-	if err != nil {
-		slog.Error("OIDC discovery failed", "error", err)
-		os.Exit(1)
-	}
+		oidcProvider, err := api.SetupOIDCProvider(context.Background(), oidcIssuer)
+		if err != nil {
+			slog.Error("OIDC discovery failed", "error", err)
+			os.Exit(1)
+		}
 
-	oidcConfig := &api.OIDCConfig{
-		Issuer:       oidcIssuer,
-		ClientID:     oidcClientID,
-		ClientSecret: oidcClientSecret,
-		RedirectURI:  oidcRedirectURI,
-	}
+		oidcConfig := &api.OIDCConfig{
+			Issuer:       oidcIssuer,
+			ClientID:     oidcClientID,
+			ClientSecret: oidcClientSecret,
+			RedirectURI:  oidcRedirectURI,
+		}
 
-	slog.Info("OIDC configured", "issuer", oidcIssuer)
+		authHandler = api.NewAuthHandler(oidcProvider, oidcConfig, db, q)
+		slog.Info("OIDC configured", "issuer", oidcIssuer)
+	} else {
+		slog.Info("authentication disabled (use -require-auth to enable)")
+	}
 
 	// HN client
 	hnClient := hn.NewClient()
@@ -113,23 +121,43 @@ func main() {
 	articlesHandler := api.NewArticlesHandler(db, q, fetcher)
 	refreshHandler := api.NewRefreshHandler(fetcher, hnClient, db, q, broker)
 	healthHandler := api.NewHealthHandler(db, q)
-	authHandler := api.NewAuthHandler(oidcProvider, oidcConfig, db, q)
-
-	// Auth helper
-	requireAuth := func(hf http.HandlerFunc) http.Handler {
-		return api.RequireAuthFunc(db, q, hf)
+	// Auth helper — wraps handlers in auth check when enabled, otherwise passes through
+	var requireAuth func(http.HandlerFunc) http.Handler
+	var requireAuthHandler func(http.Handler) http.Handler
+	if requireAuthFlag {
+		requireAuth = func(hf http.HandlerFunc) http.Handler {
+			return api.RequireAuthFunc(db, q, hf)
+		}
+		requireAuthHandler = func(h http.Handler) http.Handler {
+			return api.RequireAuth(db, q, h)
+		}
+	} else {
+		requireAuth = func(hf http.HandlerFunc) http.Handler {
+			return hf
+		}
+		requireAuthHandler = func(h http.Handler) http.Handler {
+			return h
+		}
 	}
 
 	// Routes
 	mux := http.NewServeMux()
 
-	// Auth routes (unauthenticated)
-	mux.HandleFunc("GET /api/auth/login", authHandler.Login)
-	mux.HandleFunc("GET /api/auth/callback", authHandler.Callback)
-	mux.HandleFunc("GET /api/auth/me", authHandler.Me)
-	mux.HandleFunc("POST /api/auth/logout", authHandler.Logout)
+	// Auth routes (only registered when auth is required)
+	if requireAuthFlag {
+		mux.HandleFunc("GET /api/auth/login", authHandler.Login)
+		mux.HandleFunc("GET /api/auth/callback", authHandler.Callback)
+		mux.HandleFunc("GET /api/auth/me", authHandler.Me)
+		mux.HandleFunc("POST /api/auth/logout", authHandler.Logout)
+	} else {
+		// When auth is disabled, /api/auth/me returns a dummy user so the frontend proceeds
+		mux.HandleFunc("GET /api/auth/me", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"sub":"anonymous","name":"Anonymous"}`))
+		})
+	}
 
-	// API routes (authenticated)
+	// API routes
 	mux.Handle("GET /api/stories/top", requireAuth(storiesHandler.TopStories))
 	mux.Handle("GET /api/stories/{id}/article", requireAuth(articlesHandler.GetArticle))
 	mux.Handle("GET /api/stories/{id}/comments", requireAuth(commentsHandler.GetComments))
@@ -137,8 +165,8 @@ func main() {
 	mux.Handle("POST /api/stories/{id}/refresh", requireAuth(refreshHandler.Refresh))
 	mux.Handle("GET /api/stories/{id}", requireAuth(storiesHandler.GetStory))
 	mux.Handle("GET /api/stories", requireAuth(storiesHandler.ListStories))
-	mux.Handle("GET /api/health", api.RequireAuth(db, q, healthHandler))
-	mux.Handle("GET /api/events", api.RequireAuth(db, q, broker))
+	mux.Handle("GET /api/health", requireAuthHandler(healthHandler))
+	mux.Handle("GET /api/events", requireAuthHandler(broker))
 
 	// Static file serving
 	var staticFS fs.FS
