@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"time"
 
-	"hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/store"
 )
 
 type Cleaner struct {

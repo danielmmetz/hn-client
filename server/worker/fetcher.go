@@ -7,9 +7,9 @@ import (
 
 	"golang.org/x/sync/singleflight"
 
-	"hn-client/server/hn"
-	"hn-client/server/readability"
-	"hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/hn"
+	"github.com/danielmmetz/hn-client/server/readability"
+	"github.com/danielmmetz/hn-client/server/store"
 )
 
 type Fetcher struct {

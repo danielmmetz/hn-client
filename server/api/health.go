@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/store"
 )
 
 type HealthHandler struct {

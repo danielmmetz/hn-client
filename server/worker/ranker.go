@@ -6,7 +6,7 @@ import (
 	"math"
 	"time"
 
-	"hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/store"
 )
 
 type Ranker struct {

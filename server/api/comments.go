@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"hn-client/server/hn"
-	"hn-client/server/store"
-	"hn-client/server/worker"
+	"github.com/danielmmetz/hn-client/server/hn"
+	"github.com/danielmmetz/hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/worker"
 )
 
 type CommentsHandler struct {

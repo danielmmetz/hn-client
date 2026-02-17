@@ -6,9 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	"hn-client/server/hn"
-	"hn-client/server/sse"
-	"hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/hn"
+	"github.com/danielmmetz/hn-client/server/sse"
+	"github.com/danielmmetz/hn-client/server/store"
 )
 
 type Poller struct {

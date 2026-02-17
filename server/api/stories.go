@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"hn-client/server/store"
-	"hn-client/server/worker"
+	"github.com/danielmmetz/hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/worker"
 )
 
 type StoriesHandler struct {

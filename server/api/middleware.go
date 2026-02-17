@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/store"
 )
 
 // RequireAuth wraps an http.Handler and returns 401 if no valid session cookie is present.

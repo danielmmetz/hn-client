@@ -1,10 +1,11 @@
-module hn-client/server
+module github.com/danielmmetz/hn-client/server
 
 go 1.25.1
 
 require (
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/go-shiori/go-readability v0.0.0-20251205110129-5db1dc9836f0
+	github.com/peterbourgon/ff/v3 v3.4.0
 	golang.org/x/oauth2 v0.35.0
 	golang.org/x/sync v0.19.0
 	modernc.org/sqlite v1.45.0

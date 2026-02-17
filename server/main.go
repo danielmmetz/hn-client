@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"flag"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -11,24 +12,35 @@ import (
 	"syscall"
 	"time"
 
-	"hn-client/server/api"
-	"hn-client/server/hn"
-	"hn-client/server/sse"
-	"hn-client/server/store"
-	"hn-client/server/worker"
+	"github.com/peterbourgon/ff/v3"
+
+	"github.com/danielmmetz/hn-client/server/api"
+	"github.com/danielmmetz/hn-client/server/hn"
+	"github.com/danielmmetz/hn-client/server/sse"
+	"github.com/danielmmetz/hn-client/server/store"
+	"github.com/danielmmetz/hn-client/server/worker"
 )
 
 //go:embed static/*
 var staticFiles embed.FS
 
 func main() {
-	// Database
-	dbPath := "hn.db"
-	if p := os.Getenv("DB_PATH"); p != "" {
-		dbPath = p
+	flagSet := flag.NewFlagSet("hn-client", flag.ExitOnError)
+
+	staticDir := flagSet.String("static-dir", "", "Path to static files directory (default: use embedded files)")
+	dbPath := flagSet.String("db-path", "hn.db", "Path to SQLite database file")
+	oidcIssuer := flagSet.String("oidc-issuer", "", "OIDC issuer URL")
+	oidcClientID := flagSet.String("oidc-client-id", "", "OIDC client ID")
+	oidcClientSecret := flagSet.String("oidc-client-secret", "", "OIDC client secret")
+	oidcRedirectURI := flagSet.String("oidc-redirect-uri", "", "OIDC redirect URI")
+
+	if err := ff.Parse(flagSet, os.Args[1:], ff.WithEnvVars()); err != nil {
+		slog.Error("failed to parse flags", "error", err)
+		os.Exit(1)
 	}
 
-	db, err := store.Open(dbPath)
+	// Database
+	db, err := store.Open(*dbPath)
 	if err != nil {
 		slog.Error("failed to open database", "error", err)
 		os.Exit(1)
@@ -43,30 +55,25 @@ func main() {
 	sessionStore := store.NewSessionStore(db)
 
 	// OIDC configuration
-	oidcIssuer := os.Getenv("OIDC_ISSUER")
-	oidcClientID := os.Getenv("OIDC_CLIENT_ID")
-	oidcClientSecret := os.Getenv("OIDC_CLIENT_SECRET")
-	oidcRedirectURI := os.Getenv("OIDC_REDIRECT_URI")
-
-	if oidcIssuer == "" || oidcClientID == "" || oidcClientSecret == "" || oidcRedirectURI == "" {
-		slog.Error("OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, and OIDC_REDIRECT_URI must be set")
+	if *oidcIssuer == "" || *oidcClientID == "" || *oidcClientSecret == "" || *oidcRedirectURI == "" {
+		slog.Error("oidc-issuer, oidc-client-id, oidc-client-secret, and oidc-redirect-uri must be set (via flags or env vars OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URI)")
 		os.Exit(1)
 	}
 
-	oidcProvider, err := api.SetupOIDCProvider(context.Background(), oidcIssuer)
+	oidcProvider, err := api.SetupOIDCProvider(context.Background(), *oidcIssuer)
 	if err != nil {
 		slog.Error("OIDC discovery failed", "error", err)
 		os.Exit(1)
 	}
 
 	oidcConfig := &api.OIDCConfig{
-		Issuer:       oidcIssuer,
-		ClientID:     oidcClientID,
-		ClientSecret: oidcClientSecret,
-		RedirectURI:  oidcRedirectURI,
+		Issuer:       *oidcIssuer,
+		ClientID:     *oidcClientID,
+		ClientSecret: *oidcClientSecret,
+		RedirectURI:  *oidcRedirectURI,
 	}
 
-	slog.Info("OIDC configured", "issuer", oidcIssuer)
+	slog.Info("OIDC configured", "issuer", *oidcIssuer)
 
 	// HN client
 	hnClient := hn.NewClient()
@@ -124,11 +131,11 @@ func main() {
 	mux.Handle("GET /api/health", api.RequireAuth(sessionStore, healthHandler))
 	mux.Handle("GET /api/events", api.RequireAuth(sessionStore, broker))
 
-	// Static file serving: embedded FS by default, filesystem override with STATIC_DIR
+	// Static file serving: embedded FS by default, filesystem override with -static-dir flag
 	var staticFS fs.FS
-	if d := os.Getenv("STATIC_DIR"); d != "" {
-		slog.Info("serving static files from filesystem", "dir", d)
-		staticFS = os.DirFS(d)
+	if *staticDir != "" {
+		slog.Info("serving static files from filesystem", "dir", *staticDir)
+		staticFS = os.DirFS(*staticDir)
 	} else {
 		sub, err := fs.Sub(staticFiles, "static")
 		if err != nil {
