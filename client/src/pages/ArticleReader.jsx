@@ -5,7 +5,7 @@ import { on } from '../lib/sse';
 import { timeAgo } from '../lib/time';
 import { ArticleView } from '../components/ArticleView';
 
-export function ArticleReader({ id }) {
+export function ArticleReader({ id, onShowComments }) {
   const [story, setStory] = useState(null);
   const [article, setArticle] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -155,8 +155,8 @@ export function ArticleReader({ id }) {
                 story.title
               )}
             </h1>
+            {domain && <div class="story-detail-domain">{domain}</div>}
             <div class="story-detail-meta">
-              {domain && <span class="story-detail-domain">({domain})</span>}
               <span>{story.score} points</span>
               <span class="story-separator">·</span>
               <span>{story.by}</span>
@@ -164,14 +164,27 @@ export function ArticleReader({ id }) {
               <span>{timeAgo(story.time)}</span>
             </div>
           </div>
-          <a
-            href={`/story/${story.id}`}
-            class="comments-btn"
-            aria-label={`${story.descendants ?? 0} comments`}
-          >
-            <svg class="comments-icon" viewBox="0 0 512 512" width="16" height="16" fill="currentColor"><path d="M256 32C114.6 32 0 125.1 0 240c0 49.6 21.4 95 57 130.7C44.5 421.1 2.7 466 2.2 466.5c-2.2 2.3-2.8 5.7-1.5 8.7S4.8 480 8 480c66.3 0 116-31.8 140.6-51.4 32.7 12.3 69 19.4 107.4 19.4 141.4 0 256-93.1 256-208S397.4 32 256 32zm-64 232c-13.3 0-24-10.7-24-24s10.7-24 24-24 24 10.7 24 24-10.7 24-24 24zm64 0c-13.3 0-24-10.7-24-24s10.7-24 24-24 24 10.7 24 24-10.7 24-24 24zm64 0c-13.3 0-24-10.7-24-24s10.7-24 24-24 24 10.7 24 24-10.7 24-24 24z"/></svg>
-            <span>{story.descendants ?? 0}</span>
-          </a>
+          {onShowComments ? (
+            <button
+              class="comments-btn"
+              onClick={onShowComments}
+              aria-label={`${story.descendants ?? 0} comments`}
+            >
+              <svg viewBox="0 0 18 16" width="18" height="16" aria-hidden="true">
+                <path d="M3,0 H15 Q18,0 18,3 V9 Q18,12 15,12 H9 L1,16 L5,12 H3 Q0,12 0,9 V3 Q0,0 3,0 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              </svg>
+            </button>
+          ) : (
+            <a
+              href={`/story/${story.id}`}
+              class="comments-btn"
+              aria-label={`${story.descendants ?? 0} comments`}
+            >
+              <svg viewBox="0 0 18 16" width="18" height="16" aria-hidden="true">
+                <path d="M3,0 H15 Q18,0 18,3 V9 Q18,12 15,12 H9 L1,16 L5,12 H3 Q0,12 0,9 V3 Q0,0 3,0 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+              </svg>
+            </a>
+          )}
           <button
             class={`star-btn ${starred ? 'star-btn-active' : ''}`}
             onClick={handleToggleStar}

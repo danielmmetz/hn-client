@@ -1,4 +1,5 @@
 import { timeAgo } from '../lib/time';
+import { CommentBubble } from './CommentBubble';
 
 function getDomain(url) {
   if (!url) return null;
@@ -77,11 +78,10 @@ export function StoryItem({ story, rank, starred, prefetched, selected, onSelect
       <a
         href={`/story/${story.id}`}
         class="story-item-action-link"
-        aria-label={`${story.descendants} comments`}
+        aria-label={`${story.descendants ?? 0} comments`}
         onClick={handleCommentsClick}
       >
-        <svg class="comments-icon" viewBox="0 0 512 512" width="16" height="16" fill="currentColor"><path d="M256 32C114.6 32 0 125.1 0 240c0 49.6 21.4 95 57 130.7C44.5 421.1 2.7 466 2.2 466.5c-2.2 2.3-2.8 5.7-1.5 8.7S4.8 480 8 480c66.3 0 116-31.8 140.6-51.4 32.7 12.3 69 19.4 107.4 19.4 141.4 0 256-93.1 256-208S397.4 32 256 32zm-64 232c-13.3 0-24-10.7-24-24s10.7-24 24-24 24 10.7 24 24-10.7 24-24 24zm64 0c-13.3 0-24-10.7-24-24s10.7-24 24-24 24 10.7 24 24-10.7 24-24 24zm64 0c-13.3 0-24-10.7-24-24s10.7-24 24-24 24 10.7 24 24-10.7 24-24 24z"/></svg>
-        <span class="comments-count">{story.descendants ?? 0}</span>
+        <CommentBubble count={story.descendants ?? 0} />
       </a>
     </article>
   );

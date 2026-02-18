@@ -83,19 +83,7 @@
   pointer-events: none;
 }
 
-.comments-icon {
-  font-size: 1rem;
-  line-height: 1;
-  display: block;
-  margin: 0 auto 4px;
-}
 
-.comments-count {
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1;
-  display: block;
-}
 
 
 
@@ -290,6 +278,65 @@
 
 .story-detail-text-content code {
   padding: 2px 4px;
+}
+
+/* Article View (Reader) */
+.article-view {
+  padding: 24px 32px;
+}
+
+.article-view .article-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 6px;
+}
+
+.article-view .article-byline {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.article-view .article-content {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+.article-view .article-content p {
+  margin-bottom: 1.1em;
+}
+
+.article-view .article-content a {
+  color: var(--orange);
+}
+
+.article-view .article-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.article-view .article-content pre,
+.article-view .article-content code {
+  font-size: 0.9em;
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.article-view .article-content pre {
+  padding: 12px;
+  overflow-x: auto;
+  margin-bottom: 1em;
+}
+
+.article-view .article-content code {
+  padding: 2px 4px;
+}
+
+.article-failed {
+  padding: 32px;
 }
 
 /* Comment Tree */
@@ -599,23 +646,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
   flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
   transition: color 0.15s, border-color 0.15s;
   text-decoration: none;
-  font-size: 0.8rem;
-  padding: 0 8px;
+  padding: 0;
+  cursor: pointer;
 }
 
 .comments-btn:hover {
   color: var(--orange);
   border-color: var(--orange);
-}
-
-.comments-btn .comments-icon {
-  width: 14px;
-  height: 14px;
 }
 
 /* Reader Button (Story Detail) */

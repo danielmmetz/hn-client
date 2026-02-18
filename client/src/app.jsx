@@ -28,9 +28,11 @@ function SplitLayout() {
     const m = window.location.pathname.match(/^\/story\/(\d+)$/);
     return m ? m[1] : null;
   });
+  const [readerMode, setReaderMode] = useState(false);
 
   const handleSelectStory = useCallback((id) => {
     setSelectedId(id);
+    setReaderMode(false);
     // Keep the URL in sync so back/share still works
     history.pushState(null, '', `/story/${id}`);
   }, []);
@@ -40,6 +42,7 @@ function SplitLayout() {
     function onPopState() {
       const m = window.location.pathname.match(/^\/story\/(\d+)$/);
       setSelectedId(m ? m[1] : null);
+      setReaderMode(false);
     }
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
@@ -52,7 +55,19 @@ function SplitLayout() {
       </aside>
       <div class="split-detail">
         {selectedId ? (
-          <StoryDetail key={selectedId} id={selectedId} />
+          readerMode ? (
+            <ArticleReader
+              key={`article-${selectedId}`}
+              id={selectedId}
+              onShowComments={() => setReaderMode(false)}
+            />
+          ) : (
+            <StoryDetail
+              key={selectedId}
+              id={selectedId}
+              onReaderView={() => setReaderMode(true)}
+            />
+          )
         ) : (
           <div class="split-detail-empty">
             <div class="split-detail-empty-inner">

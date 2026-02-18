@@ -8,7 +8,7 @@ import { CommentTree } from '../components/CommentTree';
 import { StalenessLabel } from '../components/StalenessLabel';
 import { PullToRefresh, RefreshButton, hasTouchSupport } from '../components/PullToRefresh';
 
-export function StoryDetail({ id }) {
+export function StoryDetail({ id, onReaderView }) {
   const [story, setStory] = useState(null);
   const [comments, setComments] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -193,16 +193,29 @@ export function StoryDetail({ id }) {
           </div>
           {offline && <span class="offline-badge">Offline</span>}
           {story.url && (
-            <a
-              href={`/article/${id}`}
-              class="reader-btn"
-              aria-label="Open reader view"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-              </svg>
-            </a>
+            onReaderView ? (
+              <button
+                class="reader-btn"
+                onClick={onReaderView}
+                aria-label="Open reader view"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+              </button>
+            ) : (
+              <a
+                href={`/article/${id}`}
+                class="reader-btn"
+                aria-label="Open reader view"
+              >
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                </svg>
+              </a>
+            )
           )}
           <button
             class={`star-btn ${starred ? 'star-btn-active' : ''}`}
