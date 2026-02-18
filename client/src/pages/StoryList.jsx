@@ -7,7 +7,6 @@ import { on } from '../lib/sse';
 import { StoryItem } from '../components/StoryItem';
 import { Pagination } from '../components/Pagination';
 import { StalenessLabel } from '../components/StalenessLabel';
-import { Toast } from '../components/Toast';
 import { PullToRefresh, RefreshButton, hasTouchSupport } from '../components/PullToRefresh';
 
 function getPageFromURL() {
@@ -24,7 +23,7 @@ export function StoryList() {
   const [hasMore, setHasMore] = useState(false);
   const [offline, setOffline] = useState(false);
   const [fetchedAt, setFetchedAt] = useState(null);
-  const [showToast, setShowToast] = useState(false);
+  const [refreshReady, setRefreshReady] = useState(false);
   const [starredIds, setStarredIds] = useState(new Set());
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const [prefetchedIds, setPrefetchedIds] = useState(new Set());
@@ -40,7 +39,7 @@ export function StoryList() {
       setOffline(!!data.offline);
       setFetchedAt(data.fetched_at || Math.floor(Date.now() / 1000));
       setLoading(false);
-      setShowToast(false);
+      setRefreshReady(false);
 
       // Prefetch comments/articles for page 1 stories (once per app session)
       if (pageNum === 1 && !prefetchedRef.current && fresh.length > 0) {
@@ -112,7 +111,7 @@ export function StoryList() {
   useEffect(() => {
     const unsub = on('stories_updated', () => {
       // Show toast instead of force-refreshing
-      setShowToast(true);
+      setRefreshReady(true);
     });
     return unsub;
   }, []);
@@ -142,7 +141,7 @@ export function StoryList() {
     window.scrollTo(0, 0);
   }
 
-  function handleToastRefresh() {
+  function handleRefreshReady() {
     fetchStories(page);
   }
 
@@ -175,7 +174,7 @@ export function StoryList() {
           <div class="story-list-status">
             <div class="story-list-status-left">
               {offline && <span class="offline-badge">Offline</span>}
-              <StalenessLabel fetchedAt={fetchedAt} />
+              <StalenessLabel fetchedAt={fetchedAt} refreshReady={refreshReady} />
             </div>
             {!isTouch && (
               <RefreshButton onRefresh={handlePullRefresh} refreshing={pullRefreshing} />
@@ -195,13 +194,7 @@ export function StoryList() {
         </div>
         <Pagination page={page} hasMore={hasMore} onPageChange={handlePageChange} />
 
-        <Toast
-          visible={showToast}
-          message="New stories available"
-          actionLabel="Tap to refresh"
-          onAction={handleToastRefresh}
-          onDismiss={() => setShowToast(false)}
-        />
+
       </div>
     </PullToRefresh>
   );

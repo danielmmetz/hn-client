@@ -23,3 +23,6 @@ server/static/
 # Sprite / Pi agent
 .pi/
 server/start.sh
+
+# Claude
+.claude/
