@@ -15,7 +15,7 @@ function getPageFromURL() {
   return p > 0 ? p : 1;
 }
 
-export function StoryList() {
+export function StoryList({ onSelectStory, selectedId } = {}) {
   const [stories, setStories] = useState([]);
   const [page, setPage] = useState(getPageFromURL);
   const [loading, setLoading] = useState(true);
@@ -189,6 +189,8 @@ export function StoryList() {
               rank={(page - 1) * 30 + i + 1}
               starred={starredIds.has(story.id)}
               prefetched={prefetchedIds.has(story.id)}
+              selected={selectedId === story.id}
+              onSelectStory={onSelectStory}
             />
           ))}
         </div>

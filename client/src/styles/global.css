@@ -53,6 +53,83 @@ button {
   margin: 0 auto;
 }
 
+/* ── Wide / split layout ─────────────────────────────────────── */
+.app-wide {
+  max-width: none;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app-wide .app-header {
+  flex-shrink: 0;
+}
+
+.app-wide .app-main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.split-layout {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+}
+
+.split-sidebar {
+  width: 380px;
+  min-width: 280px;
+  max-width: 420px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  background: var(--bg-card);
+}
+
+.split-detail {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.split-detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+}
+
+.split-detail-empty-inner {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.split-detail-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: var(--border-light);
+  color: var(--text-muted);
+  font-weight: 900;
+  font-size: 1.6rem;
+  border-radius: 12px;
+}
+
+.split-detail-empty-inner p {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 .app-header {
   display: flex;
   align-items: center;

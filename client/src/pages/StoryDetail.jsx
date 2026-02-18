@@ -182,8 +182,8 @@ export function StoryDetail({ id }) {
                 story.title
               )}
             </h1>
+            {domain && <div class="story-detail-domain">{domain}</div>}
             <div class="story-detail-meta">
-              {domain && <span class="story-detail-domain">({domain})</span>}
               <span>{story.score} points</span>
               <span class="story-separator">·</span>
               <span>{story.by}</span>

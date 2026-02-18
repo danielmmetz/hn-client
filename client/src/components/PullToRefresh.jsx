@@ -8,6 +8,20 @@ export function hasTouchSupport() {
   return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 }
 
+/** Returns the scrollTop of the nearest scrollable ancestor (or window.scrollY). */
+function getScrollTop(el) {
+  let node = el;
+  while (node && node !== document.documentElement) {
+    const style = getComputedStyle(node);
+    const overflow = style.overflowY;
+    if ((overflow === 'auto' || overflow === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return node.scrollTop;
+    }
+    node = node.parentElement;
+  }
+  return window.scrollY;
+}
+
 /**
  * Refresh button for non-touch devices.
  */
@@ -36,6 +50,7 @@ export function PullToRefresh({ onRefresh, refreshing: externalRefreshing, child
   const startY = useRef(0);
   const currentY = useRef(0);
   const isPulling = useRef(false);
+  const containerRef = useRef(null);
 
   const refreshing = externalRefreshing || internalRefreshing;
 
@@ -44,14 +59,16 @@ export function PullToRefresh({ onRefresh, refreshing: externalRefreshing, child
   }, []);
 
   const handleTouchStart = useCallback((e) => {
-    if (window.scrollY > 0) return;
+    const scrollTop = getScrollTop(containerRef.current);
+    if (scrollTop > 0) return;
     startY.current = e.touches[0].clientY;
     isPulling.current = false;
   }, []);
 
   const handleTouchMove = useCallback((e) => {
     if (refreshing) return;
-    if (window.scrollY > 0) return;
+    const scrollTop = getScrollTop(containerRef.current);
+    if (scrollTop > 0) return;
 
     currentY.current = e.touches[0].clientY;
     const diff = currentY.current - startY.current;
@@ -65,7 +82,7 @@ export function PullToRefresh({ onRefresh, refreshing: externalRefreshing, child
       const distance = Math.min(MAX_PULL, diff * 0.5);
       setPullDistance(distance);
 
-      if (diff > 0 && window.scrollY === 0) {
+      if (diff > 0 && scrollTop === 0) {
         e.preventDefault();
       }
     }
@@ -96,7 +113,7 @@ export function PullToRefresh({ onRefresh, refreshing: externalRefreshing, child
   if (!isTouch) {
     // Non-touch: just render children, button placed by parent
     return (
-      <div class="pull-to-refresh">
+      <div class="pull-to-refresh" ref={containerRef}>
         {children}
       </div>
     );
@@ -105,6 +122,7 @@ export function PullToRefresh({ onRefresh, refreshing: externalRefreshing, child
   return (
     <div
       class="pull-to-refresh"
+      ref={containerRef}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}

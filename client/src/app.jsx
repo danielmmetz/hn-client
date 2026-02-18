@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState, useCallback } from 'preact/hooks';
 import Router from 'preact-router';
 import { StoryList } from './pages/StoryList';
 import { StoryDetail } from './pages/StoryDetail';
@@ -8,8 +8,67 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { connect, disconnect } from './lib/sse';
 import { fetchUser, login, logout } from './lib/auth';
 
+const WIDE_BREAKPOINT = 1100;
+
+function useWideLayout() {
+  const [wide, setWide] = useState(() => window.innerWidth >= WIDE_BREAKPOINT);
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${WIDE_BREAKPOINT}px)`);
+    const handler = (e) => setWide(e.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
+  return wide;
+}
+
+/** Two-pane split layout used on wide screens for the story list + detail. */
+function SplitLayout() {
+  const [selectedId, setSelectedId] = useState(() => {
+    // If we're already on a /story/:id URL, pre-select that story
+    const m = window.location.pathname.match(/^\/story\/(\d+)$/);
+    return m ? m[1] : null;
+  });
+
+  const handleSelectStory = useCallback((id) => {
+    setSelectedId(id);
+    // Keep the URL in sync so back/share still works
+    history.pushState(null, '', `/story/${id}`);
+  }, []);
+
+  // Also sync from browser back/forward
+  useEffect(() => {
+    function onPopState() {
+      const m = window.location.pathname.match(/^\/story\/(\d+)$/);
+      setSelectedId(m ? m[1] : null);
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  return (
+    <div class="split-layout">
+      <aside class="split-sidebar">
+        <StoryList onSelectStory={handleSelectStory} selectedId={selectedId} />
+      </aside>
+      <div class="split-detail">
+        {selectedId ? (
+          <StoryDetail key={selectedId} id={selectedId} />
+        ) : (
+          <div class="split-detail-empty">
+            <div class="split-detail-empty-inner">
+              <span class="split-detail-empty-icon">Y</span>
+              <p>Select a story to read comments</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function App() {
   const [user, setUser] = useState(undefined); // undefined = loading
+  const wide = useWideLayout();
 
   // Check auth on mount
   useEffect(() => {
@@ -66,7 +125,7 @@ export function App() {
 
   // Authenticated
   return (
-    <div class="app">
+    <div class={`app${wide ? ' app-wide' : ''}`}>
       <header class="app-header">
         <a href="/" class="app-logo">
           <span class="logo-icon">Y</span>
@@ -86,12 +145,22 @@ export function App() {
       </header>
       <main class="app-main">
         <ErrorBoundary>
-          <Router>
-            <StoryList path="/" />
-            <StoryDetail path="/story/:id" />
-            <ArticleReader path="/article/:id" />
-            <Starred path="/starred" />
-          </Router>
+          {wide ? (
+            // Wide layout: always show split view; other pages (starred, article) still route normally
+            <Router>
+              <SplitLayout path="/" />
+              <SplitLayout path="/story/:id" />
+              <ArticleReader path="/article/:id" />
+              <Starred path="/starred" />
+            </Router>
+          ) : (
+            <Router>
+              <StoryList path="/" />
+              <StoryDetail path="/story/:id" />
+              <ArticleReader path="/article/:id" />
+              <Starred path="/starred" />
+            </Router>
+          )}
         </ErrorBoundary>
       </main>
     </div>
