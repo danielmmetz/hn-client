@@ -68,21 +68,23 @@ export function StoryItem({ story, rank, starred, prefetched, selected, onSelect
           </div>
         </div>
       </a>
-      {!onSelectStory && (story.url ? (
-        <a href={`/article/${story.id}`} class="story-item-action-link" aria-label="Reader view">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      <div class="story-item-actions">
+        {!onSelectStory && (story.url ? (
+          <a href={`/article/${story.id}`} class="story-item-action-icon story-item-action-icon--reader" aria-label="Reader view">
+            <svg viewBox="0 0 24 24" width="23" height="20" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          </a>
+        ) : (
+          <span class="story-item-action-icon story-item-action-placeholder" aria-hidden="true" />
+        ))}
+        <a
+          href={`/story/${story.id}`}
+          class="story-item-action-icon"
+          aria-label={`${story.descendants ?? 0} comments`}
+          onClick={handleCommentsClick}
+        >
+          <CommentBubble count={story.descendants ?? 0} scale={0.85} />
         </a>
-      ) : (
-        <span class="story-item-action-link story-item-action-placeholder" aria-hidden="true" />
-      ))}
-      <a
-        href={`/story/${story.id}`}
-        class="story-item-action-link"
-        aria-label={`${story.descendants ?? 0} comments`}
-        onClick={handleCommentsClick}
-      >
-        <CommentBubble count={story.descendants ?? 0} />
-      </a>
+      </div>
     </article>
   );
 }

@@ -1,4 +1,4 @@
-export function CommentBubble({ count }) {
+export function CommentBubble({ count, scale = 1 }) {
   const n = count ?? 0;
   const label =
     n >= 10000 ? `${Math.round(n / 1000)}k`
@@ -36,8 +36,8 @@ export function CommentBubble({ count }) {
   return (
     <svg
       viewBox={`0 0 ${W} ${totalH}`}
-      width={W}
-      height={totalH}
+      width={W * scale}
+      height={totalH * scale}
       aria-hidden="true"
       style="overflow: visible"
     >
@@ -48,7 +48,7 @@ export function CommentBubble({ count }) {
         dy="0.35em"
         text-anchor="middle"
         fill="currentColor"
-        font-size="10"
+        font-size="12"
         font-weight="700"
       >
         {label}
