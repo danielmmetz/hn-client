@@ -33,7 +33,7 @@ func NewPoller(client *hn.Client, fetcher *Fetcher, db *sql.DB, q *store.Queries
 		ranker:   ranker,
 		broker:   broker,
 		topList:  topList,
-		interval: 5 * time.Minute,
+		interval: 1 * time.Minute,
 	}
 }
 

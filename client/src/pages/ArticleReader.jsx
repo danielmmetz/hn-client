@@ -176,7 +176,7 @@ export function ArticleReader({ id, onShowComments }) {
             </button>
           ) : (
             <a
-              href={`/story/${story.id}`}
+              href={`#/story/${story.id}`}
               class="comments-btn"
               aria-label={`${story.descendants ?? 0} comments`}
             >

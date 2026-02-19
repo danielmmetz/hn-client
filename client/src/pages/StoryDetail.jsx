@@ -37,12 +37,16 @@ export function StoryDetail({ id, onReaderView }) {
   useEffect(() => {
     let cancelled = false;
 
+    // If cached data is less than 2 minutes old, skip the network request.
+    const FRESH_THRESHOLD = 2 * 60; // seconds
+
     async function load() {
       setLoading(true);
       setError(null);
       setOffline(false);
 
       // Step 1: Show cached data immediately
+      let hasFreshCache = false;
       try {
         const [cachedStory, cachedComments] = await Promise.all([
           getStoryFromDB(id),
@@ -53,29 +57,37 @@ export function StoryDetail({ id, onReaderView }) {
           setStory(cachedStory);
           setComments(cachedComments || { comments: [], fetched_at: null });
           setLoading(false);
+
+          // Check if both story and comments were cached recently (client-side timestamp)
+          const now = Math.floor(Date.now() / 1000);
+          const storyAge = now - (cachedStory.cached_at || 0);
+          const commentsAge = now - (cachedComments?.cached_at || 0);
+          hasFreshCache = storyAge < FRESH_THRESHOLD && commentsAge < FRESH_THRESHOLD;
         }
       } catch {
         // IndexedDB read failed — continue to network
       }
 
-      // Step 2: Fetch fresh data from network
-      try {
-        const [storyData, commentsData] = await Promise.all([
-          getStory(id),
-          getComments(id).catch(() => ({ comments: [], fetched_at: null })),
-        ]);
-        if (cancelled) return;
-        setStory(storyData);
-        setComments(commentsData);
-        setLoading(false);
-      } catch (err) {
-        if (cancelled) return;
-        if (story) {
-          setOffline(true);
+      // Step 2: Fetch fresh data from network (skip if cache is fresh)
+      if (!hasFreshCache) {
+        try {
+          const [storyData, commentsData] = await Promise.all([
+            getStory(id),
+            getComments(id).catch(() => ({ comments: [], fetched_at: null })),
+          ]);
+          if (cancelled) return;
+          setStory(storyData);
+          setComments(commentsData);
           setLoading(false);
-        } else {
-          setError(err.message);
-          setLoading(false);
+        } catch (err) {
+          if (cancelled) return;
+          if (story) {
+            setOffline(true);
+            setLoading(false);
+          } else {
+            setError(err.message);
+            setLoading(false);
+          }
         }
       }
     }
@@ -206,7 +218,7 @@ export function StoryDetail({ id, onReaderView }) {
               </button>
             ) : (
               <a
-                href={`/article/${id}`}
+                href={`#/article/${id}`}
                 class="reader-btn"
                 aria-label="Open reader view"
               >

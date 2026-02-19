@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { route } from 'preact-router';
 import { getStories } from '../lib/api';
 import { getStoriesFromDB, getSyncMeta, getStarredStoryIds } from '../lib/db';
 import { prefetchStoriesData } from '../lib/sync';
@@ -10,12 +9,15 @@ import { StalenessLabel } from '../components/StalenessLabel';
 import { PullToRefresh, RefreshButton, hasTouchSupport } from '../components/PullToRefresh';
 
 function getPageFromURL() {
-  const params = new URLSearchParams(window.location.search);
+  // Support both hash query params (#/?page=2) and legacy path query params (?page=2)
+  const hash = window.location.hash;
+  const hashQuery = hash.indexOf('?') >= 0 ? hash.slice(hash.indexOf('?')) : '';
+  const params = new URLSearchParams(hashQuery || window.location.search);
   const p = parseInt(params.get('page'), 10);
   return p > 0 ? p : 1;
 }
 
-export function StoryList({ onSelectStory, selectedId } = {}) {
+export function StoryList({ selectedId } = {}) {
   const [stories, setStories] = useState([]);
   const [page, setPage] = useState(getPageFromURL);
   const [loading, setLoading] = useState(true);
@@ -125,18 +127,17 @@ export function StoryList({ onSelectStory, selectedId } = {}) {
     return unsub;
   }, [page, fetchStories]);
 
-  // Sync state from URL on popstate (browser back/forward)
+  // Sync state from URL on hash change (browser back/forward)
   useEffect(() => {
-    function onPopState() {
+    function onHashChange() {
       setPage(getPageFromURL());
     }
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
   function handlePageChange(newPage) {
-    const url = newPage > 1 ? `/?page=${newPage}` : '/';
-    history.pushState(null, '', url);
+    window.location.hash = newPage > 1 ? `#/?page=${newPage}` : '#/';
     setPage(newPage);
     window.scrollTo(0, 0);
   }
@@ -190,7 +191,6 @@ export function StoryList({ onSelectStory, selectedId } = {}) {
               starred={starredIds.has(story.id)}
               prefetched={prefetchedIds.has(story.id)}
               selected={selectedId === story.id}
-              onSelectStory={onSelectStory}
             />
           ))}
         </div>

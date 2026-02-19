@@ -1,6 +1,6 @@
 # HN Client
 
-**Subway-compatible Hacker News.** The idea is simple: you open the app before going underground, and it already has everything you need. The server proactively fetches top stories, their full comment trees, and reader-mode article extractions on a 5-minute cycle. The client prefetches this data into IndexedDB so that stories, articles, and comments are all available offline — no loading spinners, no "connect to read more." When you resurface, it syncs up quietly via SSE.
+**Subway-compatible Hacker News.** The idea is simple: you open the app before going underground, and it already has everything you need. The server proactively fetches top stories, their full comment trees, and reader-mode article extractions on a 1-minute cycle. The client prefetches this data into IndexedDB so that stories, articles, and comments are all available offline — no loading spinners, no "connect to read more." When you resurface, it syncs up quietly via SSE.
 
 A mobile-first PWA with a Go+SQLite caching backend. The server proxies and caches HN data (stories, comments, reader-mode article extractions), provides alternative ranking APIs (top of day/week), and streams updates to clients over SSE. Authentication via OIDC is available but optional — controlled by the `-require-auth` flag. The client uses Preact, IndexedDB for offline storage, and a Service Worker for app shell caching.
 
@@ -48,7 +48,7 @@ A mobile-first PWA with a Go+SQLite caching backend. The server proxies and cach
 │  └── GET /                            (PWA)     │
 │                                                 │
 │  Background Workers                             │
-│  ├── Poll HN top stories every 5 min            │
+│  ├── Poll HN top stories every 1 min            │
 │  ├── Fetch comments for new stories             │
 │  ├── Extract reader-mode articles               │
 │  ├── Push updates to SSE subscribers            │
@@ -76,7 +76,7 @@ A mobile-first PWA with a Go+SQLite caching backend. The server proxies and cach
 
 ### How It Works
 
-A **polling worker** runs every 5 minutes, fetching up to 500 story IDs from the HN Firebase API with a concurrency limit of 10 requests. The top 60 stories are **eagerly fetched** (metadata + comments + articles); stories 61–500 get metadata only and are fetched on demand. Comments are fetched **incrementally** — only new comment IDs not already in the database are walked. Articles are extracted via `go-readability` with a 30s timeout and 1 MiB size cap; failures are flagged for optional client-initiated retry.
+A **polling worker** runs every minute, fetching up to 500 story IDs from the HN Firebase API with a concurrency limit of 10 requests. The top 60 stories are **eagerly fetched** (metadata + comments + articles); stories 61–500 get metadata only and are fetched on demand. Comments are fetched **incrementally** — only new comment IDs not already in the database are walked. Articles are extracted via `go-readability` with a 30s timeout and 1 MiB size cap; failures are flagged for optional client-initiated retry.
 
 **Rankings** are recomputed each poll cycle using an HN-adapted decay formula: `(score - 1) / (age_hours + 2)^1.5`. Period rankings (today, yesterday, this week) filter by story creation time.
 
@@ -170,22 +170,24 @@ cd server && go tool sqlc generate
 
 ### Routing
 
-API routes are prefixed with `/api/`. Static assets are embedded via `//go:embed static/*`. Any request that doesn't match an API route or static file is served `index.html` (catch-all for client-side routing with clean URLs).
+API routes are prefixed with `/api/`. Static assets are embedded via `//go:embed static/*`. Any request that doesn't match an API route or static file is served `index.html` (SPA fallback). The client uses hash-based routing (`#/story/:id`, `#/article/:id`, etc.) so the server never sees client routes.
 
 ---
 
 ## Client
 
-**Stack:** Preact (~3KB) · Vite · IndexedDB (via `idb`) · Workbox Service Worker · Plain CSS
+**Stack:** Preact (~3KB) · Vite · Hash-based routing (no router library) · IndexedDB (via `idb`) · Workbox Service Worker · Plain CSS
 
 ### Pages
 
+All client routes use hash-based routing so the page URL never changes from the server's perspective. This means the split layout stays mounted when selecting stories, preserving the story list state (no refetch). Cmd+click / ctrl+click on any internal link opens it in a new tab naturally.
+
 | Route | Page | Description |
 |---|---|---|
-| `/` | StoryList | Paginated top stories (30/page). Pull-to-refresh. Staleness indicator. |
-| `/story/:id` | StoryDetail | Reader-mode article (or text body for Ask HN), threaded comments with collapse/expand, star toggle, refresh controls. |
-| `/article/:id` | ArticleReader | Standalone reader-mode article view. |
-| `/starred` | Starred | Bookmarked stories, available offline. Client-side only (IndexedDB). |
+| `#/` | StoryList | Paginated top stories (30/page). Pull-to-refresh. Staleness indicator. |
+| `#/story/:id` | StoryDetail | Reader-mode article (or text body for Ask HN), threaded comments with collapse/expand, star toggle, refresh controls. |
+| `#/article/:id` | ArticleReader | Standalone reader-mode article view. |
+| `#/starred` | Starred | Bookmarked stories, available offline. Client-side only (IndexedDB). |
 
 ### Offline Strategy
 
@@ -224,7 +226,7 @@ hn-client/
 │   │   ├── client.go           # HN Firebase API client (concurrency-limited)
 │   │   └── types.go            # HN API response types
 │   ├── worker/
-│   │   ├── poller.go           # 5-min HN polling loop
+│   │   ├── poller.go           # 1-min HN polling loop
 │   │   ├── fetcher.go          # Story/comment/article fetch logic
 │   │   ├── ranker.go           # Ranking computation
 │   │   └── cleaner.go          # Daily cleanup
@@ -250,7 +252,7 @@ hn-client/
 │   ├── manifest.json           # PWA manifest
 │   ├── vite.config.js
 │   ├── src/
-│   │   ├── app.jsx             # Root component + router
+│   │   ├── app.jsx             # Root component, split/narrow layout, hash routing
 │   │   ├── index.jsx           # Entry point
 │   │   ├── pages/
 │   │   │   ├── StoryList.jsx
@@ -271,6 +273,7 @@ hn-client/
 │   │   │   ├── api.js          # Server API client
 │   │   │   ├── auth.js         # Client-side auth (login redirect, session check)
 │   │   │   ├── db.js           # IndexedDB wrapper (idb)
+│   │   │   ├── router.js       # Hash-based routing (useHashRoute hook, navigate)
 │   │   │   ├── sse.js          # SSE with Last-Event-ID tracking
 │   │   │   ├── sync.js         # Prefetch, eviction, data-saver logic
 │   │   │   └── time.js         # Relative time formatting
@@ -291,6 +294,7 @@ hn-client/
 - **Incremental comment fetching** — Only new comment branches are walked on refresh, avoiding full tree re-walks for popular stories with 1000+ comments.
 - **Pre-nested comment trees from server** — The server builds the tree so the client doesn't have to reconstruct it from flat data.
 - **Service Worker doesn't touch API data** — All API caching is in the app layer via IndexedDB. This avoids SW/main-thread race conditions over IndexedDB.
+- **Hash-based routing** — All client routes use `#/` hashes (like hn.premii.com). The split layout stays mounted across story selections, so the story list never refetches. Links are plain `<a href="#/...">` with no click interception, so cmd+click, ctrl+click, and middle-click all open new tabs naturally.
 - **Client-side only stars** — Stars live in IndexedDB, not on the server. Clearing browser data loses them.
 - **Single binary deployment** — Client build is embedded via `//go:embed static/*`. One binary, no file dependencies.
 - **sqlc for type-safe SQL** — Queries are plain SQL; `go tool sqlc generate` produces type-safe Go. Column type overrides map SQLite integers to `int` and nullable columns to Go pointers. The generated types are used directly — no wrapper structs or conversion code. Schema is defined once in `schema.sql`, embedded for both sqlc codegen and runtime migrations.

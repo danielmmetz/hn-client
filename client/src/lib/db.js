@@ -38,7 +38,7 @@ export async function putStories(stories) {
   const tx = db.transaction('stories', 'readwrite');
   const now = Math.floor(Date.now() / 1000);
   for (const story of stories) {
-    await tx.store.put({ ...story, fetched_at: story.fetched_at || now });
+    await tx.store.put({ ...story, fetched_at: story.fetched_at || now, cached_at: now });
   }
   await tx.done;
 }
@@ -84,6 +84,7 @@ export async function putComments(storyId, commentsData) {
     story_id: Number(storyId),
     comments: commentsData.comments || [],
     fetched_at: commentsData.fetched_at || now,
+    cached_at: now,
   });
 }
 

@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'preact/hooks';
-import Router from 'preact-router';
+import { useEffect, useState } from 'preact/hooks';
+import { useHashRoute } from './lib/router';
 import { StoryList } from './pages/StoryList';
 import { StoryDetail } from './pages/StoryDetail';
 import { ArticleReader } from './pages/ArticleReader';
@@ -21,37 +21,23 @@ function useWideLayout() {
   return wide;
 }
 
-/** Two-pane split layout used on wide screens for the story list + detail. */
-function SplitLayout() {
-  const [selectedId, setSelectedId] = useState(() => {
-    // If we're already on a /story/:id URL, pre-select that story
-    const m = window.location.pathname.match(/^\/story\/(\d+)$/);
-    return m ? m[1] : null;
-  });
+/** Two-pane split layout used on wide screens.
+ *  Stays mounted the whole time — only the hash determines which story
+ *  is shown in the detail pane. StoryList keeps its state across
+ *  story selections, so no refetching. */
+function SplitLayout({ route }) {
+  const selectedId = route.page === 'story' ? route.id : null;
   const [readerMode, setReaderMode] = useState(false);
 
-  const handleSelectStory = useCallback((id) => {
-    setSelectedId(id);
-    setReaderMode(false);
-    // Keep the URL in sync so back/share still works
-    history.pushState(null, '', `/story/${id}`);
-  }, []);
-
-  // Also sync from browser back/forward
+  // Reset reader mode when story changes
   useEffect(() => {
-    function onPopState() {
-      const m = window.location.pathname.match(/^\/story\/(\d+)$/);
-      setSelectedId(m ? m[1] : null);
-      setReaderMode(false);
-    }
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+    setReaderMode(false);
+  }, [selectedId]);
 
   return (
     <div class="split-layout">
       <aside class="split-sidebar">
-        <StoryList onSelectStory={handleSelectStory} selectedId={selectedId} />
+        <StoryList selectedId={selectedId} />
       </aside>
       <div class="split-detail">
         {selectedId ? (
@@ -81,9 +67,33 @@ function SplitLayout() {
   );
 }
 
+/** Narrow (mobile) layout — one page at a time, driven by hash route. */
+function NarrowLayout({ route }) {
+  switch (route.page) {
+    case 'story':
+      return <StoryDetail key={route.id} id={route.id} />;
+    case 'article':
+      return <ArticleReader key={route.id} id={route.id} />;
+    case 'starred':
+      return <Starred />;
+    default:
+      return <StoryList />;
+  }
+}
+
 export function App() {
   const [user, setUser] = useState(undefined); // undefined = loading
   const wide = useWideLayout();
+  const route = useHashRoute();
+
+  // Redirect legacy path-based URLs to hash equivalents
+  useEffect(() => {
+    const path = window.location.pathname;
+    if (path !== '/' && path !== '/index.html') {
+      const hash = '#' + path;
+      window.history.replaceState(null, '', '/' + hash);
+    }
+  }, []);
 
   // Check auth on mount
   useEffect(() => {
@@ -142,13 +152,13 @@ export function App() {
   return (
     <div class={`app${wide ? ' app-wide' : ''}`}>
       <header class="app-header">
-        <a href="/" class="app-logo">
+        <a href="#/" class="app-logo">
           <span class="logo-icon">Y</span>
           <span class="logo-text">HN Reader</span>
         </a>
         <nav class="app-nav">
-          <a href="/">Top</a>
-          <a href="/starred">Starred</a>
+          <a href="#/">Top</a>
+          <a href="#/starred">Starred</a>
           <button class="signout-btn" onClick={logout} title="Sign out">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -161,20 +171,9 @@ export function App() {
       <main class="app-main">
         <ErrorBoundary>
           {wide ? (
-            // Wide layout: always show split view; other pages (starred, article) still route normally
-            <Router>
-              <SplitLayout path="/" />
-              <SplitLayout path="/story/:id" />
-              <ArticleReader path="/article/:id" />
-              <Starred path="/starred" />
-            </Router>
+            <SplitLayout route={route} />
           ) : (
-            <Router>
-              <StoryList path="/" />
-              <StoryDetail path="/story/:id" />
-              <ArticleReader path="/article/:id" />
-              <Starred path="/starred" />
-            </Router>
+            <NarrowLayout route={route} />
           )}
         </ErrorBoundary>
       </main>
