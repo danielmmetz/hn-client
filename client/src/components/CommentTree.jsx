@@ -11,7 +11,6 @@ export function CommentTree({ comments, collapsedIds, toggleCollapse, focusedCom
             <Comment
               key={comment.id}
               comment={comment}
-              depth={0}
               collapsedIds={collapsedIds}
               toggleCollapse={toggleCollapse}
               focusedCommentId={focusedCommentId}
