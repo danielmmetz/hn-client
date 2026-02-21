@@ -1,13 +1,33 @@
+# Version control & CI
 .git
+.github
+.gitignore
+
+# Pi agent
 .pi
+
+# Environment files
 .env
 .env.*
 !.env.example
+
+# Dependencies (rebuilt in Docker)
 client/node_modules
+
+# Build artifacts
 server/hn-server
+server/static
+hn-server
+
+# Database files
 server/hn.db
 server/hn.db-shm
 server/hn.db-wal
-server/static
-hn-server
+
+# Documentation
 README.md
+LICENSE
+
+# Docker (avoid recursive context)
+Dockerfile
+docker-compose*
