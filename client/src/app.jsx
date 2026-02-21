@@ -70,9 +70,21 @@ function SplitLayout({ route, storiesRef }) {
     },
   });
 
+  // Handle clicks on sidebar links that target the already-selected story.
+  // When hash doesn't change, the route won't update, so we must reset readerMode manually.
+  const handleSidebarClick = useCallback((e) => {
+    if (!readerMode || !selectedId) return;
+    const link = e.target.closest('a[href]');
+    if (!link) return;
+    const href = link.getAttribute('href');
+    if (href === `#/story/${selectedId}`) {
+      setReaderMode(false);
+    }
+  }, [readerMode, selectedId]);
+
   return (
     <div class="split-layout">
-      <aside class="split-sidebar">
+      <aside class="split-sidebar" onClick={handleSidebarClick}>
         <StoryList selectedId={selectedId} storiesRef={storiesRef} />
       </aside>
       <div class="split-detail">
