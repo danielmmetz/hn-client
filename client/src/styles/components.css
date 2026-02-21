@@ -427,6 +427,16 @@
   color: var(--text-muted);
 }
 
+.comment-permalink {
+  text-decoration: none;
+  color: var(--text-muted);
+}
+
+.comment-permalink:hover {
+  text-decoration: underline;
+  color: var(--orange);
+}
+
 .comment-deleted {
   color: var(--text-muted);
   font-style: italic;

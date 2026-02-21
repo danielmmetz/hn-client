@@ -9,7 +9,7 @@ function countReplies(comment) {
   return count;
 }
 
-export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentId }) {
+export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentId, storyId }) {
   const collapsed = collapsedIds.has(comment.id);
   const replyCount = countReplies(comment);
   const isDeleted = comment.deleted;
@@ -27,7 +27,13 @@ export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentI
           ) : (
             <>
               <span class="comment-author">{comment.by}</span>
-              <span class="comment-time">{timeAgo(comment.time)}</span>
+              <a
+                class="comment-time comment-permalink"
+                href={`#/story/${storyId}?comment=${comment.id}`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {timeAgo(comment.time)}
+              </a>
             </>
           )}
           {collapsed && replyCount > 0 && (
@@ -48,6 +54,7 @@ export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentI
                     collapsedIds={collapsedIds}
                     toggleCollapse={toggleCollapse}
                     focusedCommentId={focusedCommentId}
+                    storyId={storyId}
                   />
                 ))}
               </div>

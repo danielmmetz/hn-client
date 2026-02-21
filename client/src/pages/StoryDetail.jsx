@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'preact/hooks';
 import { getStory, getComments, refreshStory } from '../lib/api';
 import { getStoryFromDB, getCommentsFromDB, isStarred, starStory, unstarStory } from '../lib/db';
 import { isPrefetchAllowed } from '../lib/sync';
@@ -20,6 +20,17 @@ export function StoryDetail({ id, onReaderView }) {
   const [starred, setStarred] = useState(false);
   const [collapsedIds, setCollapsedIds] = useState(new Set());
   const [focusedCommentId, setFocusedCommentId] = useState(null);
+  const scrolledToPermalink = useRef(false);
+
+  // Parse ?comment= param from hash (e.g. #/story/123?comment=456)
+  const permalinkCommentId = useMemo(() => {
+    const hash = window.location.hash;
+    const qIdx = hash.indexOf('?');
+    if (qIdx < 0) return null;
+    const params = new URLSearchParams(hash.slice(qIdx + 1));
+    const val = params.get('comment');
+    return val ? Number(val) : null;
+  }, []);
 
   const sseCleanupRef = useRef(null);
   const pageRef = useRef(null);
@@ -35,6 +46,16 @@ export function StoryDetail({ id, onReaderView }) {
       return next;
     });
   }, []);
+
+  // Clear ?comment= query param from the URL (used when j/k overrides permalink focus)
+  function clearCommentParam() {
+    const hash = window.location.hash;
+    const qIdx = hash.indexOf('?');
+    if (qIdx >= 0) {
+      const clean = hash.slice(0, qIdx);
+      window.history.replaceState(null, '', clean || '#/');
+    }
+  }
 
   // Get all visible comment elements in DOM order
   function getVisibleComments() {
@@ -52,6 +73,7 @@ export function StoryDetail({ id, onReaderView }) {
         const firstId = parseInt(els[0].dataset.commentId, 10);
         setFocusedCommentId(firstId);
         ensureVisible(els[0]);
+        clearCommentParam();
         return;
       }
       const idx = els.findIndex((el) => parseInt(el.dataset.commentId, 10) === focusedCommentId);
@@ -60,6 +82,7 @@ export function StoryDetail({ id, onReaderView }) {
         const nextId = parseInt(nextEl.dataset.commentId, 10);
         setFocusedCommentId(nextId);
         ensureVisible(nextEl);
+        clearCommentParam();
       }
     },
     k: (e) => {
@@ -73,6 +96,7 @@ export function StoryDetail({ id, onReaderView }) {
         const prevId = parseInt(prevEl.dataset.commentId, 10);
         setFocusedCommentId(prevId);
         ensureVisible(prevEl);
+        clearCommentParam();
       }
     },
     x: (e) => {
@@ -82,6 +106,20 @@ export function StoryDetail({ id, onReaderView }) {
       }
     },
   });
+
+  // Scroll to permalink comment once comments are loaded
+  useEffect(() => {
+    if (!permalinkCommentId || !comments || scrolledToPermalink.current) return;
+    scrolledToPermalink.current = true;
+    setFocusedCommentId(permalinkCommentId);
+    // Defer scroll to allow the DOM to render the comment tree
+    requestAnimationFrame(() => {
+      const el = pageRef.current?.querySelector(
+        `.comment[data-comment-id="${permalinkCommentId}"]`
+      );
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [permalinkCommentId, comments]);
 
   useEffect(() => {
     isStarred(id).then(setStarred).catch(() => {});
@@ -337,6 +375,7 @@ export function StoryDetail({ id, onReaderView }) {
               collapsedIds={collapsedIds}
               toggleCollapse={toggleCollapse}
               focusedCommentId={focusedCommentId}
+              storyId={id}
             />
           )}
         </PullToRefresh>

@@ -9,13 +9,24 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
  *   (empty or #/)   → { page: 'home' }
  */
 function parseHash(hash) {
-  const s = hash.replace(/^#\/?/, '');
-  if (!s) return { page: 'home' };
+  const raw = hash.replace(/^#\/?/, '');
+  if (!raw) return { page: 'home', params: {} };
 
-  const parts = s.split('/');
+  // Split path from query params (e.g. "story/123?comment=456")
+  const [path, queryString] = raw.split('?');
+  const parts = path.split('/');
   const page = parts[0] || 'home';
   const id = parts[1] || null;
-  return { page, id };
+
+  const params = {};
+  if (queryString) {
+    for (const pair of queryString.split('&')) {
+      const [key, value] = pair.split('=');
+      if (key) params[decodeURIComponent(key)] = decodeURIComponent(value || '');
+    }
+  }
+
+  return { page, id, params };
 }
 
 /** React hook that tracks the current hash route. */
