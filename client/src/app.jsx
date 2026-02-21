@@ -26,13 +26,13 @@ function useWideLayout() {
  *  is shown in the detail pane. StoryList keeps its state across
  *  story selections, so no refetching. */
 function SplitLayout({ route }) {
-  const selectedId = route.page === 'story' ? route.id : null;
+  const selectedId = (route.page === 'story' || route.page === 'article') ? route.id : null;
   const [readerMode, setReaderMode] = useState(false);
 
-  // Reset reader mode when story changes
+  // Enable reader mode when navigating to article route, reset otherwise
   useEffect(() => {
-    setReaderMode(false);
-  }, [selectedId]);
+    setReaderMode(route.page === 'article');
+  }, [selectedId, route.page]);
 
   return (
     <div class="split-layout">
