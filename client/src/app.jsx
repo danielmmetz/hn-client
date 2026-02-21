@@ -155,6 +155,11 @@ function NarrowLayout({ route, storiesRef }) {
         window.location.hash = `#/story/${route.id}`;
       }
     },
+    h: () => {
+      if (route.page === 'story' || route.page === 'article') {
+        window.location.hash = '#/';
+      }
+    },
   });
 
   switch (route.page) {

@@ -7,6 +7,7 @@ export function KeyboardShortcutsHelp({ onClose }) {
     { key: 'x', desc: 'Collapse / expand comment' },
     { key: 'r', desc: 'Reader view' },
     { key: 'c', desc: 'Comments view' },
+    { key: 'h', desc: 'Back to story list' },
     { key: '?', desc: 'Toggle this help' },
   ];
 
