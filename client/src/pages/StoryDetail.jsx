@@ -105,6 +105,12 @@ export function StoryDetail({ id, onReaderView }) {
         toggleCollapse(focusedCommentId);
       }
     },
+    y: (e) => {
+      if (focusedCommentId !== null) {
+        e.preventDefault();
+        window.location.hash = `#/story/${id}?comment=${focusedCommentId}`;
+      }
+    },
   });
 
   // Scroll to permalink comment once comments are loaded
