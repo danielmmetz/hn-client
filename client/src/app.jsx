@@ -27,12 +27,22 @@ function useWideLayout() {
 /** Two-pane split layout used on wide screens. */
 function SplitLayout({ route, storiesRef }) {
   const selectedId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
-  const [readerMode, setReaderMode] = useState(false);
+  const [readerMode, setReaderMode] = useState(route.page === 'article');
 
   // Enable reader mode when navigating to article route, reset otherwise
   useEffect(() => {
     setReaderMode(route.page === 'article');
   }, [selectedId, route.page]);
+
+  // Keep URL hash in sync with readerMode so that switching to narrow layout
+  // (which reads the hash route) preserves the current view mode.
+  useEffect(() => {
+    if (!selectedId) return;
+    const expectedPage = readerMode ? 'article' : 'story';
+    if (route.page !== expectedPage) {
+      window.location.replace(`#/${expectedPage}/${selectedId}`);
+    }
+  }, [readerMode, selectedId]);
 
   // r/c view switching
   useKeyboardShortcuts({
