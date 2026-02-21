@@ -37,20 +37,33 @@ func (h *CommentsHandler) GetComments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// On-demand fetch if no comments and story has descendants > 0
+	// On-demand fetch if no comments in DB
 	if len(comments) == 0 {
+		// Check if the story should have comments — first try DB, then HN API directly
+		var kids []int
 		story, storyErr := store.Nullable(h.q.GetStoryByID(ctx, h.db, id))
 		if storyErr == nil && story != nil && story.Descendants > 0 {
+			// Story is in DB with descendants — get kids from HN API
+			item, itemErr := h.hnClient.GetItem(ctx, id)
+			if itemErr == nil && item != nil {
+				kids = item.Kids
+			}
+		} else if story == nil {
+			// Story not in DB at all — fetch it from HN API
 			item, itemErr := h.hnClient.GetItem(ctx, id)
 			if itemErr == nil && item != nil && len(item.Kids) > 0 {
-				if fetchErr := h.fetcher.FetchCommentsSingleflight(ctx, id, item.Kids); fetchErr != nil {
-					slog.Error("on-demand comment fetch failed", "story_id", id, "error", fetchErr)
-				} else {
-					comments, fetchedAt, err = store.GetCommentTree(ctx, h.db, h.q, id)
-					if err != nil {
-						http.Error(w, "internal error", http.StatusInternalServerError)
-						return
-					}
+				kids = item.Kids
+			}
+		}
+
+		if len(kids) > 0 {
+			if fetchErr := h.fetcher.FetchCommentsSingleflight(ctx, id, kids); fetchErr != nil {
+				slog.Error("on-demand comment fetch failed", "story_id", id, "error", fetchErr)
+			} else {
+				comments, fetchedAt, err = store.GetCommentTree(ctx, h.db, h.q, id)
+				if err != nil {
+					http.Error(w, "internal error", http.StatusInternalServerError)
+					return
 				}
 			}
 		}

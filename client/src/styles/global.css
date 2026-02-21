@@ -142,6 +142,20 @@ button {
   z-index: 100;
 }
 
+.back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  margin-right: 4px;
+  padding: 4px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.back-btn:hover {
+  text-decoration: none;
+}
+
 .app-logo {
   display: flex;
   align-items: center;

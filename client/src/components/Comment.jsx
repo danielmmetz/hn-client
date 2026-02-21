@@ -1,4 +1,3 @@
-import { useState } from 'preact/hooks';
 import { timeAgo } from '../lib/time';
 
 function countReplies(comment) {
@@ -10,22 +9,27 @@ function countReplies(comment) {
   return count;
 }
 
-export function Comment({ comment, depth = 0 }) {
-  const [collapsed, setCollapsed] = useState(false);
+export function Comment({ comment, depth = 0, collapsedIds, toggleCollapse, focusedCommentId }) {
+  const collapsed = collapsedIds.has(comment.id);
   const replyCount = countReplies(comment);
   const isDeleted = comment.deleted;
   const maxDepth = 8;
   const effectiveDepth = Math.min(depth, maxDepth);
+  const isFocused = focusedCommentId === comment.id;
 
   return (
-    <div class="comment" style={{ '--depth': effectiveDepth }}>
+    <div
+      class={`comment${isFocused ? ' comment-focused' : ''}`}
+      style={{ '--depth': effectiveDepth }}
+      data-comment-id={comment.id}
+    >
       <div class="comment-indent">
         {Array.from({ length: effectiveDepth }, (_, i) => (
           <span class="comment-indent-line" key={i} />
         ))}
       </div>
       <div class="comment-body">
-        <div class="comment-header" onClick={() => setCollapsed(!collapsed)}>
+        <div class="comment-header" onClick={() => toggleCollapse(comment.id)}>
           {isDeleted ? (
             <span class="comment-deleted">[deleted]</span>
           ) : (
@@ -46,7 +50,14 @@ export function Comment({ comment, depth = 0 }) {
             {comment.children && comment.children.length > 0 && (
               <div class="comment-children">
                 {comment.children.map((child) => (
-                  <Comment key={child.id} comment={child} depth={depth + 1} />
+                  <Comment
+                    key={child.id}
+                    comment={child}
+                    depth={depth + 1}
+                    collapsedIds={collapsedIds}
+                    toggleCollapse={toggleCollapse}
+                    focusedCommentId={focusedCommentId}
+                  />
                 ))}
               </div>
             )}

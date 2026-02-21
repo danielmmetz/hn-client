@@ -21,7 +21,7 @@ export function StoryItem({ story, rank, starred, prefetched, selected }) {
   const titleTarget = titleIsExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {};
 
   return (
-    <article class={`story-item${selected ? ' story-item-selected' : ''}`}>
+    <article class={`story-item${selected ? ' story-item-selected' : ''}`} data-story-id={story.id}>
       <a
         href={titleHref}
         class="story-item-title-link"

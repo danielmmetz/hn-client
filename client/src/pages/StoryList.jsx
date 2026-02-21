@@ -17,7 +17,7 @@ function getPageFromURL() {
   return p > 0 ? p : 1;
 }
 
-export function StoryList({ selectedId } = {}) {
+export function StoryList({ selectedId, storiesRef } = {}) {
   const [stories, setStories] = useState([]);
   const [page, setPage] = useState(getPageFromURL);
   const [loading, setLoading] = useState(true);
@@ -103,6 +103,11 @@ export function StoryList({ selectedId } = {}) {
     load();
     return () => { cancelled = true; };
   }, [page, fetchStories]);
+
+  // Expose stories to parent via ref for keyboard navigation
+  useEffect(() => {
+    if (storiesRef) storiesRef.current = stories;
+  }, [stories, storiesRef]);
 
   // Load starred story IDs
   useEffect(() => {

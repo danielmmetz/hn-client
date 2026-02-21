@@ -1,6 +1,6 @@
 import { Comment } from './Comment';
 
-export function CommentTree({ comments }) {
+export function CommentTree({ comments, collapsedIds, toggleCollapse, focusedCommentId }) {
   return (
     <section class="comment-tree">
       {comments.length === 0 ? (
@@ -8,7 +8,14 @@ export function CommentTree({ comments }) {
       ) : (
         <div class="comment-tree-list">
           {comments.map((comment) => (
-            <Comment key={comment.id} comment={comment} depth={0} />
+            <Comment
+              key={comment.id}
+              comment={comment}
+              depth={0}
+              collapsedIds={collapsedIds}
+              toggleCollapse={toggleCollapse}
+              focusedCommentId={focusedCommentId}
+            />
           ))}
         </div>
       )}

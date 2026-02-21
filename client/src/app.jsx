@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
 import { useHashRoute } from './lib/router';
+import { useKeyboardShortcuts, ensureVisible } from './lib/keyboard';
 import { StoryList } from './pages/StoryList';
 import { StoryDetail } from './pages/StoryDetail';
 import { ArticleReader } from './pages/ArticleReader';
 import { Starred } from './pages/Starred';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import { connect, disconnect } from './lib/sse';
 import { fetchUser, login, logout } from './lib/auth';
+
 
 const WIDE_BREAKPOINT = 1100;
 
@@ -21,12 +24,9 @@ function useWideLayout() {
   return wide;
 }
 
-/** Two-pane split layout used on wide screens.
- *  Stays mounted the whole time — only the hash determines which story
- *  is shown in the detail pane. StoryList keeps its state across
- *  story selections, so no refetching. */
-function SplitLayout({ route }) {
-  const selectedId = (route.page === 'story' || route.page === 'article') ? route.id : null;
+/** Two-pane split layout used on wide screens. */
+function SplitLayout({ route, storiesRef }) {
+  const selectedId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
   const [readerMode, setReaderMode] = useState(false);
 
   // Enable reader mode when navigating to article route, reset otherwise
@@ -34,10 +34,46 @@ function SplitLayout({ route }) {
     setReaderMode(route.page === 'article');
   }, [selectedId, route.page]);
 
+  // r/c view switching
+  useKeyboardShortcuts({
+    r: () => {
+      if (selectedId) setReaderMode(true);
+    },
+    c: () => {
+      if (selectedId) setReaderMode(false);
+    },
+  });
+
+  // J/K story navigation
+  useKeyboardShortcuts({
+    J: (e) => {
+      e.preventDefault();
+      const stories = storiesRef.current;
+      if (!stories || stories.length === 0) return;
+      const idx = stories.findIndex((s) => s.id === selectedId);
+      const nextIdx = idx < 0 ? 0 : Math.min(idx + 1, stories.length - 1);
+      const targetId = stories[nextIdx].id;
+      window.location.hash = `#/story/${targetId}`;
+      const el = document.querySelector(`.split-sidebar [data-story-id="${targetId}"]`);
+      if (el) ensureVisible(el);
+    },
+    K: (e) => {
+      e.preventDefault();
+      const stories = storiesRef.current;
+      if (!stories || stories.length === 0) return;
+      const idx = stories.findIndex((s) => s.id === selectedId);
+      const targetIdx = idx <= 0 ? 0 : idx - 1;
+      const targetId = stories[targetIdx].id;
+      window.location.hash = `#/story/${targetId}`;
+      const el = document.querySelector(`.split-sidebar [data-story-id="${targetId}"]`);
+      if (el) ensureVisible(el);
+    },
+  });
+
   return (
     <div class="split-layout">
       <aside class="split-sidebar">
-        <StoryList selectedId={selectedId} />
+        <StoryList selectedId={selectedId} storiesRef={storiesRef} />
       </aside>
       <div class="split-detail">
         {selectedId ? (
@@ -68,23 +104,76 @@ function SplitLayout({ route }) {
 }
 
 /** Narrow (mobile) layout — one page at a time, driven by hash route. */
-function NarrowLayout({ route }) {
+function NarrowLayout({ route, storiesRef }) {
+  const activeId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
+
+  // J/K story navigation in narrow mode
+  useKeyboardShortcuts({
+    J: (e) => {
+      if (route.page !== 'home' && route.page !== 'story' && route.page !== 'article') return;
+      e.preventDefault();
+      const stories = storiesRef.current;
+      if (!stories || stories.length === 0) return;
+      if (route.page === 'home') {
+        window.location.hash = `#/story/${stories[0].id}`;
+      } else {
+        const idx = stories.findIndex((s) => s.id === activeId);
+        if (idx >= 0 && idx < stories.length - 1) {
+          window.location.hash = `#/story/${stories[idx + 1].id}`;
+        }
+      }
+    },
+    K: (e) => {
+      if (route.page !== 'story' && route.page !== 'article') return;
+      e.preventDefault();
+      const stories = storiesRef.current;
+      if (!stories || stories.length === 0) return;
+      const idx = stories.findIndex((s) => s.id === activeId);
+      if (idx > 0) {
+        window.location.hash = `#/story/${stories[idx - 1].id}`;
+      }
+    },
+    r: () => {
+      if (route.page === 'story') {
+        window.location.hash = `#/article/${route.id}`;
+      }
+    },
+    c: () => {
+      if (route.page === 'article') {
+        window.location.hash = `#/story/${route.id}`;
+      }
+    },
+  });
+
   switch (route.page) {
     case 'story':
-      return <StoryDetail key={route.id} id={route.id} />;
+      return <StoryDetail key={route.id} id={route.id} storiesRef={storiesRef} />;
     case 'article':
-      return <ArticleReader key={route.id} id={route.id} />;
+      return <ArticleReader key={route.id} id={route.id} storiesRef={storiesRef} />;
     case 'starred':
       return <Starred />;
     default:
-      return <StoryList />;
+      return <StoryList storiesRef={storiesRef} />;
   }
 }
 
 export function App() {
   const [user, setUser] = useState(undefined); // undefined = loading
+  const [showHelp, setShowHelp] = useState(false);
   const wide = useWideLayout();
   const route = useHashRoute();
+  const storiesRef = useRef([]);
+
+  // ? to toggle help modal
+  useKeyboardShortcuts({
+    '?': (e) => {
+      e.preventDefault();
+      setShowHelp((v) => !v);
+    },
+    Escape: () => {
+      if (showHelp) setShowHelp(false);
+    },
+  });
 
   // Redirect legacy path-based URLs to hash equivalents
   useEffect(() => {
@@ -152,10 +241,18 @@ export function App() {
   return (
     <div class={`app${wide ? ' app-wide' : ''}`}>
       <header class="app-header">
-        <a href="#/" class="app-logo">
-          <span class="logo-icon">Y</span>
-          <span class="logo-text">HN Reader</span>
-        </a>
+        {!wide && (route.page === 'story' || route.page === 'article') ? (
+          <a href="#/" class="back-btn" aria-label="Back to stories">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </a>
+        ) : (
+          <a href="#/" class="app-logo">
+            <span class="logo-icon">Y</span>
+            <span class="logo-text">HN Reader</span>
+          </a>
+        )}
         <nav class="app-nav">
           <a href="#/">Top</a>
           <a href="#/starred">Starred</a>
@@ -171,12 +268,13 @@ export function App() {
       <main class="app-main">
         <ErrorBoundary>
           {wide ? (
-            <SplitLayout route={route} />
+            <SplitLayout route={route} storiesRef={storiesRef} />
           ) : (
-            <NarrowLayout route={route} />
+            <NarrowLayout route={route} storiesRef={storiesRef} />
           )}
         </ErrorBoundary>
       </main>
+      {showHelp && <KeyboardShortcutsHelp onClose={() => setShowHelp(false)} />}
     </div>
   );
 }

@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'preact/hooks';
+import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
 import { getStory, getComments, refreshStory } from '../lib/api';
 import { getStoryFromDB, getCommentsFromDB, isStarred, starStory, unstarStory } from '../lib/db';
 import { isPrefetchAllowed } from '../lib/sync';
 import { on } from '../lib/sse';
 import { timeAgo } from '../lib/time';
+import { useKeyboardShortcuts, ensureVisible } from '../lib/keyboard';
 import { CommentTree } from '../components/CommentTree';
 import { StalenessLabel } from '../components/StalenessLabel';
 import { PullToRefresh, RefreshButton, hasTouchSupport } from '../components/PullToRefresh';
@@ -17,8 +18,70 @@ export function StoryDetail({ id, onReaderView }) {
   const [offline, setOffline] = useState(false);
   const [showLoadButton, setShowLoadButton] = useState(!isPrefetchAllowed());
   const [starred, setStarred] = useState(false);
+  const [collapsedIds, setCollapsedIds] = useState(new Set());
+  const [focusedCommentId, setFocusedCommentId] = useState(null);
 
   const sseCleanupRef = useRef(null);
+  const pageRef = useRef(null);
+
+  const toggleCollapse = useCallback((commentId) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(commentId)) {
+        next.delete(commentId);
+      } else {
+        next.add(commentId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Get all visible comment elements in DOM order
+  function getVisibleComments() {
+    if (!pageRef.current) return [];
+    return Array.from(pageRef.current.querySelectorAll('.comment[data-comment-id]'));
+  }
+
+  // Keyboard shortcuts for comment navigation
+  useKeyboardShortcuts({
+    j: (e) => {
+      e.preventDefault();
+      const els = getVisibleComments();
+      if (els.length === 0) return;
+      if (focusedCommentId === null) {
+        const firstId = parseInt(els[0].dataset.commentId, 10);
+        setFocusedCommentId(firstId);
+        ensureVisible(els[0]);
+        return;
+      }
+      const idx = els.findIndex((el) => parseInt(el.dataset.commentId, 10) === focusedCommentId);
+      if (idx < els.length - 1) {
+        const nextEl = els[idx + 1];
+        const nextId = parseInt(nextEl.dataset.commentId, 10);
+        setFocusedCommentId(nextId);
+        ensureVisible(nextEl);
+      }
+    },
+    k: (e) => {
+      e.preventDefault();
+      const els = getVisibleComments();
+      if (els.length === 0) return;
+      if (focusedCommentId === null) return;
+      const idx = els.findIndex((el) => parseInt(el.dataset.commentId, 10) === focusedCommentId);
+      if (idx > 0) {
+        const prevEl = els[idx - 1];
+        const prevId = parseInt(prevEl.dataset.commentId, 10);
+        setFocusedCommentId(prevId);
+        ensureVisible(prevEl);
+      }
+    },
+    x: (e) => {
+      if (focusedCommentId !== null) {
+        e.preventDefault();
+        toggleCollapse(focusedCommentId);
+      }
+    },
+  });
 
   useEffect(() => {
     isStarred(id).then(setStarred).catch(() => {});
@@ -62,7 +125,8 @@ export function StoryDetail({ id, onReaderView }) {
           const now = Math.floor(Date.now() / 1000);
           const storyAge = now - (cachedStory.cached_at || 0);
           const commentsAge = now - (cachedComments?.cached_at || 0);
-          hasFreshCache = storyAge < FRESH_THRESHOLD && commentsAge < FRESH_THRESHOLD;
+          const hasComments = cachedComments?.comments?.length > 0;
+          hasFreshCache = storyAge < FRESH_THRESHOLD && commentsAge < FRESH_THRESHOLD && hasComments;
         }
       } catch {
         // IndexedDB read failed — continue to network
@@ -181,7 +245,7 @@ export function StoryDetail({ id, onReaderView }) {
   const domain = getDomain(story.url);
 
   return (
-    <div class="story-detail-page">
+    <div class="story-detail-page" ref={pageRef}>
       <header class="story-detail-header">
         <div class="story-detail-title-row">
           <div class="story-detail-title-group">
@@ -258,9 +322,9 @@ export function StoryDetail({ id, onReaderView }) {
           <div class="story-detail-comments-header">
             <span class="story-detail-comments-count">
               {story.descendants ?? 0} comments
-              {comments?.fetched_at && (
+              {comments?.fetched_at ? (
                 <StalenessLabel fetchedAt={comments.fetched_at} />
-              )}
+              ) : null}
             </span>
             {!hasTouchSupport() && (
               <RefreshButton onRefresh={handleRefreshComments} refreshing={refreshing} />
@@ -270,6 +334,9 @@ export function StoryDetail({ id, onReaderView }) {
           {comments && (
             <CommentTree
               comments={comments.comments || []}
+              collapsedIds={collapsedIds}
+              toggleCollapse={toggleCollapse}
+              focusedCommentId={focusedCommentId}
             />
           )}
         </PullToRefresh>
