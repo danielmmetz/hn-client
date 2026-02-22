@@ -35,8 +35,26 @@ export async function getStories(page = 1) {
   }
 }
 
+/**
+ * Network-first fetch for top stories by period with IndexedDB fallback.
+ * Sends client timezone for calendar-based period boundaries.
+ */
 export async function getTopStories(period = 'day', page = 1) {
-  return fetchJSON(`${BASE}/stories/top?period=${period}&page=${page}`);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  try {
+    const data = await fetchJSON(`${BASE}/stories/top?period=${period}&page=${page}&tz=${encodeURIComponent(tz)}`);
+    const stories = data.stories || [];
+    if (stories.length > 0) {
+      db.putTopStories(period, page, stories).catch(() => {});
+    }
+    return data;
+  } catch (err) {
+    const cached = await db.getTopStoriesFromDB(period, page);
+    if (cached && cached.stories && cached.stories.length > 0) {
+      return { stories: cached.stories, fetched_at: cached.fetched_at, offline: true, total: cached.stories.length, period };
+    }
+    throw err;
+  }
 }
 
 /**

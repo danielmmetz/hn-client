@@ -52,6 +52,22 @@ func (q *Queries) CountStories(ctx context.Context, db DBTX) (int, error) {
 	return count, err
 }
 
+const countStoriesByTimeRange = `-- name: CountStoriesByTimeRange :one
+SELECT COUNT(*) FROM stories WHERE time >= ? AND time < ?
+`
+
+type CountStoriesByTimeRangeParams struct {
+	Time   int64 `json:"time"`
+	Time_2 int64 `json:"time_2"`
+}
+
+func (q *Queries) CountStoriesByTimeRange(ctx context.Context, db DBTX, arg CountStoriesByTimeRangeParams) (int, error) {
+	row := db.QueryRowContext(ctx, countStoriesByTimeRange, arg.Time, arg.Time_2)
+	var count int
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteStory = `-- name: DeleteStory :exec
 DELETE FROM stories WHERE id = ?
 `
@@ -209,6 +225,61 @@ type ListStoriesByTimeRangeParams struct {
 
 func (q *Queries) ListStoriesByTimeRange(ctx context.Context, db DBTX, arg ListStoriesByTimeRangeParams) ([]*Story, error) {
 	rows, err := db.QueryContext(ctx, listStoriesByTimeRange, arg.Time, arg.Time_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []*Story{}
+	for rows.Next() {
+		var i Story
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.URL,
+			&i.Text,
+			&i.Score,
+			&i.By,
+			&i.Time,
+			&i.Descendants,
+			&i.Type,
+			&i.FetchedAt,
+			&i.Rank,
+			&i.Dead,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, &i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listStoriesByTimeRangeByScore = `-- name: ListStoriesByTimeRangeByScore :many
+SELECT id, title, url, text, score, by, time, descendants, type, fetched_at, rank, dead
+FROM stories WHERE time >= ? AND time < ?
+ORDER BY score DESC
+LIMIT ? OFFSET ?
+`
+
+type ListStoriesByTimeRangeByScoreParams struct {
+	Time   int64 `json:"time"`
+	Time_2 int64 `json:"time_2"`
+	Limit  int   `json:"limit"`
+	Offset int   `json:"offset"`
+}
+
+func (q *Queries) ListStoriesByTimeRangeByScore(ctx context.Context, db DBTX, arg ListStoriesByTimeRangeByScoreParams) ([]*Story, error) {
+	rows, err := db.QueryContext(ctx, listStoriesByTimeRangeByScore,
+		arg.Time,
+		arg.Time_2,
+		arg.Limit,
+		arg.Offset,
+	)
 	if err != nil {
 		return nil, err
 	}

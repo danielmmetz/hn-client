@@ -30,7 +30,7 @@ A mobile-first PWA with a Go+SQLite caching backend. The server proxies and cach
 
 A **polling worker** runs every minute, fetching up to 500 story IDs from the HN Firebase API with a concurrency limit of 10 requests. The top 60 stories are **eagerly fetched** (metadata + comments + articles); stories 61–500 get metadata only and are fetched on demand. Comments are fetched **incrementally** — only new comment IDs not already in the database are walked. Articles are extracted via `go-readability` with a 30s timeout and 1 MiB size cap; failures are flagged for optional client-initiated retry.
 
-**Rankings** are recomputed each poll cycle using an HN-adapted decay formula: `(score - 1) / (age_hours + 2)^1.5`. Period rankings (today, yesterday, this week) filter by story creation time.
+**Rankings** are recomputed each poll cycle using an HN-adapted decay formula: `(score - 1) / (age_hours + 2)^1.5`. Period rankings (today, yesterday, this week) filter by story creation time with **calendar-based timezone boundaries** — the client sends its IANA timezone (e.g., `America/New_York`) and the server computes midnight-to-midnight boundaries accordingly, so "yesterday" means the actual previous calendar day in the user's local time.
 
 A **daily cleanup** job removes stories that haven't been on the front page for 30+ days and aren't in any active ranking period.
 
@@ -60,7 +60,9 @@ Authentication is **optional**, controlled by the `-require-auth` flag. When dis
 
 The Service Worker caches only the app shell (HTML/JS/CSS) — it does **not** intercept API requests. Data flows through the Preact app's fetch layer: network-first with IndexedDB fallback. On fast/unmetered connections, comments and articles for the top 30 stories are prefetched in the background. On metered/slow connections (detected via `navigator.connection`), prefetch is skipped and a manual load button is shown.
 
-The client maintains an SSE connection for real-time updates. Story list updates show a non-intrusive toast; comment and article updates are applied after user-initiated refreshes.
+A **view menu** dropdown in the header provides navigation between Frontpage (live HN rankings), Top - Today, Top - Yesterday, Top - This Week, and Starred stories. The [Y] logo navigates home; the "HN Reader · {view}" label opens the menu. Period views use pull-to-refresh (no SSE push) since historical rankings change infrequently. All views — including period top lists — are cached in IndexedDB for offline access.
+
+The client maintains an SSE connection for real-time Frontpage updates. Story list updates show a non-intrusive toast; comment and article updates are applied after user-initiated refreshes.
 
 ### Keyboard Shortcuts
 

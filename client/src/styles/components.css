@@ -572,6 +572,20 @@
   gap: 8px;
 }
 
+/* Top Stories */
+.top-stories-period-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.top-stories-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
 /* Offline Badge */
 .offline-badge {
   display: inline-flex;

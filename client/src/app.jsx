@@ -2,11 +2,13 @@ import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
 import { useHashRoute } from './lib/router';
 import { useKeyboardShortcuts, ensureVisible } from './lib/keyboard';
 import { StoryList } from './pages/StoryList';
+import { TopStoryList } from './pages/TopStoryList';
 import { StoryDetail } from './pages/StoryDetail';
 import { ArticleReader } from './pages/ArticleReader';
 import { Starred } from './pages/Starred';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
+import { ViewMenu, getViewLabel } from './components/ViewMenu';
 import { connect, disconnect } from './lib/sse';
 import { fetchUser, login, logout } from './lib/auth';
 
@@ -24,10 +26,28 @@ function useWideLayout() {
   return wide;
 }
 
+/** Determine if the current route is a "top" list view */
+function getListView(route) {
+  if (route.page === 'top') return { type: 'top', period: route.id };
+  if (route.page === 'starred') return { type: 'starred' };
+  return { type: 'frontpage' };
+}
+
 /** Two-pane split layout used on wide screens. */
 function SplitLayout({ route, storiesRef }) {
   const selectedId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
   const [readerMode, setReaderMode] = useState(route.page === 'article');
+  // Track which list view was active when a story was selected, so the sidebar
+  // keeps showing the correct list (frontpage vs top/period vs starred)
+  const [sidebarView, setSidebarView] = useState(() => getListView(route));
+
+  // Update sidebar view when navigating to a list page
+  useEffect(() => {
+    const view = getListView(route);
+    if (view.type !== 'frontpage' || route.page === 'home') {
+      setSidebarView(view);
+    }
+  }, [route.page, route.id]);
 
   // Enable reader mode when navigating to article route, reset otherwise
   useEffect(() => {
@@ -102,10 +122,20 @@ function SplitLayout({ route, storiesRef }) {
     }
   }, [readerMode, selectedId]);
 
+  const renderSidebar = () => {
+    if (sidebarView.type === 'top') {
+      return <TopStoryList period={sidebarView.period} selectedId={selectedId} storiesRef={storiesRef} />;
+    }
+    if (sidebarView.type === 'starred') {
+      return <Starred selectedId={selectedId} />;
+    }
+    return <StoryList selectedId={selectedId} storiesRef={storiesRef} />;
+  };
+
   return (
     <div class="split-layout">
       <aside class="split-sidebar" onClick={handleSidebarClick}>
-        <StoryList selectedId={selectedId} storiesRef={storiesRef} />
+        {renderSidebar()}
       </aside>
       <div class="split-detail">
         {selectedId ? (
@@ -198,6 +228,8 @@ function NarrowLayout({ route, storiesRef }) {
       return <ArticleReader key={route.id} id={route.id} storiesRef={storiesRef} />;
     case 'starred':
       return <Starred />;
+    case 'top':
+      return <TopStoryList key={route.id} period={route.id} storiesRef={storiesRef} />;
     default:
       return <StoryList storiesRef={storiesRef} />;
   }
@@ -206,6 +238,7 @@ function NarrowLayout({ route, storiesRef }) {
 export function App() {
   const [user, setUser] = useState(undefined); // undefined = loading
   const [showHelp, setShowHelp] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const wide = useWideLayout();
   const route = useHashRoute();
   const storiesRef = useRef([]);
@@ -220,6 +253,11 @@ export function App() {
       if (showHelp) setShowHelp(false);
     },
   });
+
+  // Close menu when route changes
+  useEffect(() => {
+    setShowMenu(false);
+  }, [route.page, route.id]);
 
   // Redirect legacy path-based URLs to hash equivalents
   useEffect(() => {
@@ -294,22 +332,33 @@ export function App() {
             </svg>
           </a>
         ) : (
-          <a href="#/" class="app-logo">
-            <span class="logo-icon">Y</span>
-            <span class="logo-text">HN Reader</span>
-          </a>
+          <div class="app-logo-group">
+            <a href="#/" class="logo-icon-link" onClick={() => setShowMenu(false)}>
+              <span class="logo-icon">Y</span>
+            </a>
+            <button
+              class="logo-menu-trigger"
+              onClick={() => setShowMenu((v) => !v)}
+              aria-expanded={showMenu}
+              aria-haspopup="true"
+            >
+              <span class="logo-text">HN Reader</span>
+              <span class="logo-separator">·</span>
+              <span class="logo-view-label">{getViewLabel(route)}</span>
+              <svg class="logo-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+            {showMenu && <ViewMenu route={route} onClose={() => setShowMenu(false)} />}
+          </div>
         )}
-        <nav class="app-nav">
-          <a href="#/">Top</a>
-          <a href="#/starred">Starred</a>
-          <button class="signout-btn" onClick={logout} title="Sign out">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </button>
-        </nav>
+        <button class="signout-btn" onClick={logout} title="Sign out">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
       </header>
       <main class="app-main">
         <ErrorBoundary>

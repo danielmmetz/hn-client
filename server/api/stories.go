@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/danielmmetz/hn-client/server/store"
 	"github.com/danielmmetz/hn-client/server/worker"
@@ -157,7 +158,7 @@ func (h *StoriesHandler) GetStory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, r, story)
 }
 
-// TopStories handles GET /api/stories/top?period=day|yesterday|week&page=1
+// TopStories handles GET /api/stories/top?period=day|yesterday|week&page=1&tz=America/New_York
 func (h *StoriesHandler) TopStories(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	period := r.URL.Query().Get("period")
@@ -175,16 +176,48 @@ func (h *StoriesHandler) TopStories(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Parse client timezone, default to UTC
+	loc := time.UTC
+	if tz := r.URL.Query().Get("tz"); tz != "" {
+		if parsed, err := time.LoadLocation(tz); err == nil {
+			loc = parsed
+		}
+	}
+
+	now := time.Now().In(loc)
+	var fromTime, toTime int64
+
+	switch period {
+	case "day":
+		// Midnight today in client's timezone → now
+		midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		fromTime = midnight.Unix()
+		toTime = now.Unix()
+	case "yesterday":
+		// Midnight yesterday → midnight today in client's timezone
+		midnightToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		midnightYesterday := midnightToday.AddDate(0, 0, -1)
+		fromTime = midnightYesterday.Unix()
+		toTime = midnightToday.Unix()
+	case "week":
+		// Midnight 7 days ago → now in client's timezone
+		midnight7DaysAgo := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, -7)
+		fromTime = midnight7DaysAgo.Unix()
+		toTime = now.Unix()
+	}
+
 	pageSize := 30
 
-	total, err := h.q.CountRankingsByPeriod(ctx, h.db, period)
+	total, err := h.q.CountStoriesByTimeRange(ctx, h.db, store.CountStoriesByTimeRangeParams{
+		Time: fromTime, Time_2: toTime,
+	})
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	stories, err := h.q.GetStoriesByPeriod(ctx, h.db, store.GetStoriesByPeriodParams{
-		Period: period, Limit: pageSize, Offset: (page - 1) * pageSize,
+	stories, err := h.q.ListStoriesByTimeRangeByScore(ctx, h.db, store.ListStoriesByTimeRangeByScoreParams{
+		Time: fromTime, Time_2: toTime, Limit: pageSize, Offset: (page - 1) * pageSize,
 	})
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)

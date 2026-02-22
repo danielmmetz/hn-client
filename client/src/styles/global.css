@@ -156,16 +156,20 @@ button {
   text-decoration: none;
 }
 
-.app-logo {
+.app-logo-group {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: white;
-  font-weight: 700;
-  font-size: 1.1rem;
+  position: relative;
 }
 
-.app-logo:hover {
+.logo-icon-link {
+  display: flex;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.logo-icon-link:hover {
   text-decoration: none;
 }
 
@@ -182,26 +186,101 @@ button {
   border-radius: 4px;
 }
 
+.logo-menu-trigger {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: white;
+  font-family: var(--font);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.logo-menu-trigger:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
 .logo-text {
   color: white;
 }
 
-.app-nav {
-  display: flex;
-  gap: 16px;
-  align-items: center;
+.logo-separator {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 400;
 }
 
-.app-nav a {
+.logo-view-label {
   color: rgba(255, 255, 255, 0.9);
-  font-size: 0.95rem;
   font-weight: 500;
-  padding: 4px 0;
 }
 
-.app-nav a:hover {
-  color: white;
-  text-decoration: none;
+.logo-chevron {
+  opacity: 0.7;
+  margin-left: 1px;
+  flex-shrink: 0;
+}
+
+/* View Menu Dropdown */
+.view-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  min-width: 200px;
+  padding: 4px 0;
+  z-index: 200;
+  animation: view-menu-in 0.12s ease;
+}
+
+@keyframes view-menu-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.view-menu-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: none;
+  border: none;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  gap: 8px;
+}
+
+.view-menu-item:hover {
+  background: var(--border-light);
+}
+
+.view-menu-item-active {
+  font-weight: 600;
+  color: var(--orange);
+}
+
+.view-menu-item-check {
+  width: 16px;
+  font-size: 0.8rem;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.view-menu-divider {
+  height: 1px;
+  background: var(--border-light);
+  margin: 4px 0;
 }
 
 .signout-btn {

@@ -1,30 +1,36 @@
 import { openDB } from 'idb';
 
 const DB_NAME = 'hn-reader';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbPromise;
 
 function getDB() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        // Stories store
-        const stories = db.createObjectStore('stories', { keyPath: 'id' });
-        stories.createIndex('fetched_at', 'fetched_at');
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          // Stories store
+          const stories = db.createObjectStore('stories', { keyPath: 'id' });
+          stories.createIndex('fetched_at', 'fetched_at');
 
-        // Articles store
-        db.createObjectStore('articles', { keyPath: 'story_id' });
+          // Articles store
+          db.createObjectStore('articles', { keyPath: 'story_id' });
 
-        // Comments store
-        const comments = db.createObjectStore('comments', { keyPath: 'story_id' });
-        // We store the entire comment tree per story (keyed by story_id)
+          // Comments store
+          db.createObjectStore('comments', { keyPath: 'story_id' });
 
-        // Stars store
-        db.createObjectStore('stars', { keyPath: 'story_id' });
+          // Stars store
+          db.createObjectStore('stars', { keyPath: 'story_id' });
 
-        // Sync metadata store
-        db.createObjectStore('sync_meta', { keyPath: 'name' });
+          // Sync metadata store
+          db.createObjectStore('sync_meta', { keyPath: 'name' });
+        }
+
+        if (oldVersion < 2) {
+          // Top stories cache keyed by "period:page" (e.g. "yesterday:1")
+          db.createObjectStore('top_stories', { keyPath: 'key' });
+        }
       },
     });
   }
@@ -130,6 +136,32 @@ export async function getCachedStoryIds(storyIds) {
     if (entry) cached.add(Number(id));
   }
   return cached;
+}
+
+// --- Top Stories Cache ---
+
+export async function putTopStories(period, page, stories) {
+  const db = await getDB();
+  const now = Math.floor(Date.now() / 1000);
+  const tx = db.transaction(['top_stories', 'stories'], 'readwrite');
+  // Cache the page listing
+  await tx.objectStore('top_stories').put({
+    key: `${period}:${page}`,
+    stories,
+    fetched_at: now,
+  });
+  // Also cache individual stories
+  for (const story of stories) {
+    await tx.objectStore('stories').put({ ...story, fetched_at: story.fetched_at || now, cached_at: now });
+  }
+  await tx.done;
+}
+
+export async function getTopStoriesFromDB(period, page) {
+  const db = await getDB();
+  const entry = await db.get('top_stories', `${period}:${page}`);
+  if (!entry) return null;
+  return entry;
 }
 
 // --- Sync Meta ---

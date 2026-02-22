@@ -52,6 +52,15 @@ SELECT id, title, url, text, score, by, time, descendants, type, fetched_at, ran
 FROM stories WHERE time >= ? AND time < ?
 ORDER BY time DESC;
 
+-- name: ListStoriesByTimeRangeByScore :many
+SELECT id, title, url, text, score, by, time, descendants, type, fetched_at, rank, dead
+FROM stories WHERE time >= ? AND time < ?
+ORDER BY score DESC
+LIMIT ? OFFSET ?;
+
+-- name: CountStoriesByTimeRange :one
+SELECT COUNT(*) FROM stories WHERE time >= ? AND time < ?;
+
 -- name: OldOffPageStoryIDs :many
 SELECT s.id FROM stories s
 WHERE s.rank IS NULL
