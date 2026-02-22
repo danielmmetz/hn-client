@@ -15,11 +15,13 @@ export function ensureVisible(el, { margin = 8 } = {}) {
     const bottom = window.innerHeight - margin;
 
     // Scroll to show the full element; prioritize top if element is taller than viewport
-    if (rect.top < top) {
-      window.scrollBy(0, rect.top - top);
-    }
     if (rect.bottom > bottom) {
       window.scrollBy(0, rect.bottom - bottom);
+    }
+    // Re-read after possible scroll so the top check uses current position
+    const rect2 = el.getBoundingClientRect();
+    if (rect2.top < top) {
+      window.scrollBy(0, rect2.top - top);
     }
   } else {
     // Scrolling within a container
@@ -32,8 +34,10 @@ export function ensureVisible(el, { margin = 8 } = {}) {
     if (elRect.bottom > visibleBottom) {
       scrollParent.scrollTop += (elRect.bottom - visibleBottom);
     }
-    if (elRect.top < visibleTop) {
-      scrollParent.scrollTop -= (visibleTop - elRect.top);
+    // Re-read after possible scroll so the top check uses current position
+    const elRect2 = el.getBoundingClientRect();
+    if (elRect2.top < visibleTop) {
+      scrollParent.scrollTop -= (visibleTop - elRect2.top);
     }
   }
 }
