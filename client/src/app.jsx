@@ -44,13 +44,21 @@ function SplitLayout({ route, storiesRef }) {
     }
   }, [readerMode, selectedId]);
 
-  // r/c view switching
+  // r/c view switching + v to open link
   useKeyboardShortcuts({
     r: () => {
       if (selectedId) setReaderMode(true);
     },
     c: () => {
       if (selectedId) setReaderMode(false);
+    },
+    v: () => {
+      if (!selectedId) return;
+      const stories = storiesRef.current;
+      const story = stories && stories.find((s) => s.id === selectedId);
+      if (story && story.url) {
+        window.open(story.url, '_blank', 'noopener,noreferrer');
+      }
     },
   });
 
@@ -168,6 +176,15 @@ function NarrowLayout({ route, storiesRef }) {
     h: () => {
       if (route.page === 'story' || route.page === 'article') {
         window.location.hash = '#/';
+      }
+    },
+    v: () => {
+      const id = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
+      if (!id) return;
+      const stories = storiesRef.current;
+      const story = stories && stories.find((s) => s.id === id);
+      if (story && story.url) {
+        window.open(story.url, '_blank', 'noopener,noreferrer');
       }
     },
   });

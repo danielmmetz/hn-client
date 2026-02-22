@@ -8,6 +8,7 @@ export function KeyboardShortcutsHelp({ onClose }) {
     { key: 'y', desc: 'Permalink to comment' },
     { key: 'r', desc: 'Reader view' },
     { key: 'c', desc: 'Comments view' },
+    { key: 'v', desc: 'Open link in new tab' },
     { key: 'h', desc: 'Back to story list' },
     { key: '?', desc: 'Toggle this help' },
   ];
