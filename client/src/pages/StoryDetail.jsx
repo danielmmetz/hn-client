@@ -123,21 +123,7 @@ export function StoryDetail({ id, onReaderView }) {
       const el = pageRef.current?.querySelector(
         `.comment[data-comment-id="${permalinkCommentId}"]`
       );
-      if (el) {
-        // Find the scroll container: .split-detail (desktop) or window (mobile)
-        const splitDetail = el.closest('.split-detail');
-        if (splitDetail) {
-          // Desktop: scroll the split-detail pane directly
-          const elTop = el.getBoundingClientRect().top - splitDetail.getBoundingClientRect().top + splitDetail.scrollTop;
-          splitDetail.scrollTo({ top: elTop, behavior: 'smooth' });
-        } else {
-          // Mobile: account for sticky .app-header
-          const header = document.querySelector('.app-header');
-          const headerHeight = header ? header.getBoundingClientRect().height : 0;
-          const elTop = el.getBoundingClientRect().top + window.scrollY - headerHeight;
-          window.scrollTo({ top: elTop, behavior: 'smooth' });
-        }
-      }
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }, [permalinkCommentId, comments]);
 

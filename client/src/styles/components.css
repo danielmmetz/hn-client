@@ -399,6 +399,18 @@
   border-bottom: 1px solid var(--border-light);
 }
 
+/* On narrow screens (no .app-wide), comments scroll with the window past
+   the sticky .app-header.  scroll-margin-top tells scrollIntoView to leave
+   clearance.  In the split (.app-wide) layout the scroll container has no
+   header overlap, so we reset to 0. */
+.comment {
+  scroll-margin-top: 48px;
+}
+
+.app-wide .comment {
+  scroll-margin-top: 0;
+}
+
 .comment-body {
   flex: 1;
   min-width: 0;
