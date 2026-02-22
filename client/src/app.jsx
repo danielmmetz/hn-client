@@ -36,13 +36,15 @@ function SplitLayout({ route, storiesRef }) {
 
   // Keep URL hash in sync with readerMode so that switching to narrow layout
   // (which reads the hash route) preserves the current view mode.
+  // Only react to readerMode changes (keyboard toggle), not selectedId changes,
+  // to avoid overwriting the URL when navigating to a different story.
   useEffect(() => {
     if (!selectedId) return;
     const expectedPage = readerMode ? 'article' : 'story';
     if (route.page !== expectedPage) {
       window.location.replace(`#/${expectedPage}/${selectedId}`);
     }
-  }, [readerMode, selectedId]);
+  }, [readerMode]);
 
   // r/c view switching + v to open link
   useKeyboardShortcuts({
