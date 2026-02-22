@@ -9,17 +9,32 @@ const VIEWS = [
   { label: 'Starred', hash: '#/starred' },
 ];
 
-export function getViewLabel(route) {
-  if (!route) return 'Frontpage';
-  if (route.page === 'top') {
-    switch (route.id) {
+function viewToLabel(type, period) {
+  if (type === 'top') {
+    switch (period) {
       case 'day': return 'Top - Today';
       case 'yesterday': return 'Top - Yesterday';
       case 'week': return 'Top - This Week';
       default: return 'Top';
     }
   }
+  if (type === 'starred') return 'Starred';
+  return 'Frontpage';
+}
+
+export function getViewLabel(route) {
+  if (!route) return 'Frontpage';
+  if (route.page === 'top') return viewToLabel('top', route.id);
   if (route.page === 'starred') return 'Starred';
+  if (route.page === 'home') return 'Frontpage';
+  // On story/article pages, use the persisted list view
+  try {
+    const stored = sessionStorage.getItem('hn-active-list-view');
+    if (stored) {
+      const view = JSON.parse(stored);
+      return viewToLabel(view.type, view.period);
+    }
+  } catch {}
   return 'Frontpage';
 }
 

@@ -26,10 +26,25 @@ function useWideLayout() {
   return wide;
 }
 
-/** Determine if the current route is a "top" list view */
+const LIST_VIEW_KEY = 'hn-active-list-view';
+
+/** Determine if the current route is a list view (not a story/article detail) */
 function getListView(route) {
   if (route.page === 'top') return { type: 'top', period: route.id };
   if (route.page === 'starred') return { type: 'starred' };
+  if (route.page === 'home') return { type: 'frontpage' };
+  return null; // story/article — not a list view
+}
+
+function saveListView(view) {
+  try { sessionStorage.setItem(LIST_VIEW_KEY, JSON.stringify(view)); } catch {}
+}
+
+function loadListView() {
+  try {
+    const stored = sessionStorage.getItem(LIST_VIEW_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {}
   return { type: 'frontpage' };
 }
 
@@ -38,14 +53,19 @@ function SplitLayout({ route, storiesRef }) {
   const selectedId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
   const [readerMode, setReaderMode] = useState(route.page === 'article');
   // Track which list view was active when a story was selected, so the sidebar
-  // keeps showing the correct list (frontpage vs top/period vs starred)
-  const [sidebarView, setSidebarView] = useState(() => getListView(route));
+  // keeps showing the correct list (frontpage vs top/period vs starred).
+  // Persisted to sessionStorage so it survives page refresh.
+  const [sidebarView, setSidebarView] = useState(() => {
+    const fromRoute = getListView(route);
+    return fromRoute || loadListView();
+  });
 
   // Update sidebar view when navigating to a list page
   useEffect(() => {
     const view = getListView(route);
-    if (view.type !== 'frontpage' || route.page === 'home') {
+    if (view) {
       setSidebarView(view);
+      saveListView(view);
     }
   }, [route.page, route.id]);
 
