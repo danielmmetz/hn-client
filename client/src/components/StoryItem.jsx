@@ -1,15 +1,6 @@
 import { timeAgo } from '../lib/time';
+import { getDomain } from '../lib/url';
 import { CommentBubble } from './CommentBubble';
-
-function getDomain(url) {
-  if (!url) return null;
-  try {
-    const h = new URL(url).hostname;
-    return h.replace(/^www\./, '');
-  } catch {
-    return null;
-  }
-}
 
 export function StoryItem({ story, rank, starred, prefetched, selected }) {
   const domain = getDomain(story.url);

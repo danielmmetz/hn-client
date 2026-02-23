@@ -77,20 +77,6 @@ button {
 .app-wide {
   max-width: none;
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-}
-
-.app-wide .app-header {
-  flex-shrink: 0;
-}
-
-.app-wide .app-main {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
 }
 
 .split-layout {

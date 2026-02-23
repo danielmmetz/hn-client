@@ -3,6 +3,7 @@ import { getStory, getArticle, refreshStory } from '../lib/api';
 import { getStoryFromDB, getArticleFromDB, isStarred, starStory, unstarStory } from '../lib/db';
 import { on } from '../lib/sse';
 import { timeAgo } from '../lib/time';
+import { getDomain } from '../lib/url';
 import { ArticleView } from '../components/ArticleView';
 
 export function ArticleReader({ id, onShowComments }) {
@@ -132,11 +133,6 @@ export function ArticleReader({ id, onShowComments }) {
 
   if (!story) {
     return <div class="page-error">Story not found.</div>;
-  }
-
-  function getDomain(url) {
-    if (!url) return null;
-    try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
   }
 
   const domain = getDomain(story.url);

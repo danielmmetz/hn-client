@@ -1,15 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'preact/hooks';
-import { getStories } from '../lib/api';
-import { getStoriesFromDB, getSyncMeta, getStarredStoryIds } from '../lib/db';
-import { prefetchStoriesData } from '../lib/sync';
+import { getStories, getTopStories } from '../lib/api';
+import { getStoriesFromDB, getTopStoriesFromDB, getSyncMeta, getStarredStoryIds } from '../lib/db';
+import { prefetchStoriesData, isPrefetchAllowed } from '../lib/sync';
 import { on } from '../lib/sse';
 import { StoryItem } from '../components/StoryItem';
 import { Pagination } from '../components/Pagination';
 import { StalenessLabel } from '../components/StalenessLabel';
 import { PullToRefresh, RefreshButton, hasTouchSupport } from '../components/PullToRefresh';
 
+const PERIOD_LABELS = {
+  day: "Today's Top Stories",
+  yesterday: "Yesterday's Top Stories",
+  week: "This Week's Top Stories",
+};
+
 function getPageFromURL() {
-  // Support both hash query params (#/?page=2) and legacy path query params (?page=2)
   const hash = window.location.hash;
   const hashQuery = hash.indexOf('?') >= 0 ? hash.slice(hash.indexOf('?')) : '';
   const params = new URLSearchParams(hashQuery || window.location.search);
@@ -17,7 +22,17 @@ function getPageFromURL() {
   return p > 0 ? p : 1;
 }
 
-export function StoryList({ selectedId, storiesRef } = {}) {
+/**
+ * Unified story list component.
+ *
+ * Props:
+ *   - period: null for frontpage, or 'day'|'yesterday'|'week' for top stories
+ *   - selectedId: highlighted story id (split layout)
+ *   - storiesRef: ref to expose stories array to parent
+ */
+export function StoryList({ period, selectedId, storiesRef } = {}) {
+  const isFrontpage = !period;
+
   const [stories, setStories] = useState([]);
   const [page, setPage] = useState(getPageFromURL);
   const [loading, setLoading] = useState(true);
@@ -30,11 +45,14 @@ export function StoryList({ selectedId, storiesRef } = {}) {
   const [pullRefreshing, setPullRefreshing] = useState(false);
   const [prefetchedIds, setPrefetchedIds] = useState(new Set());
   const prefetchedRef = useRef(false);
+  const listRef = useRef(null);
   const isTouch = typeof window !== 'undefined' ? hasTouchSupport() : true;
 
   const fetchStories = useCallback(async (pageNum) => {
     try {
-      const data = await getStories(pageNum);
+      const data = isFrontpage
+        ? await getStories(pageNum)
+        : await getTopStories(period, pageNum);
       const fresh = data.stories || [];
       setStories(fresh);
       setHasMore(pageNum * 30 < (data.total || 0));
@@ -43,10 +61,9 @@ export function StoryList({ selectedId, storiesRef } = {}) {
       setLoading(false);
       setRefreshReady(false);
 
-      // Prefetch comments/articles for page 1 stories (once per app session)
-      if (pageNum === 1 && !prefetchedRef.current && fresh.length > 0) {
+      // Prefetch comments/articles for frontpage page 1 (once per session)
+      if (isFrontpage && pageNum === 1 && !prefetchedRef.current && fresh.length > 0) {
         prefetchedRef.current = true;
-
         prefetchStoriesData(fresh, {
           onStoryPrefetched: (id) => {
             setPrefetchedIds((prev) => {
@@ -58,19 +75,28 @@ export function StoryList({ selectedId, storiesRef } = {}) {
         }).catch(() => {});
       }
     } catch (err) {
-      // If we already have cached data, just show offline indicator
-      const cached = await getStoriesFromDB(pageNum);
+      // Try IndexedDB fallback
+      let cached, cachedFetchedAt;
+      if (isFrontpage) {
+        cached = await getStoriesFromDB(pageNum);
+        cachedFetchedAt = cached?.length > 0 ? await getSyncMeta('last_stories_fetch') : null;
+      } else {
+        const entry = await getTopStoriesFromDB(period, pageNum);
+        cached = entry?.stories;
+        cachedFetchedAt = entry?.fetched_at;
+      }
       if (cached && cached.length > 0) {
         setStories(cached);
         setHasMore(cached.length >= 30);
         setOffline(true);
+        setFetchedAt(cachedFetchedAt);
         setLoading(false);
       } else {
         setError(err.message);
         setLoading(false);
       }
     }
-  }, []);
+  }, [isFrontpage, period]);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,13 +108,20 @@ export function StoryList({ selectedId, storiesRef } = {}) {
 
       // Step 1: Show cached data immediately
       try {
-        const cached = await getStoriesFromDB(page);
+        let cached, cachedFetchedAt;
+        if (isFrontpage) {
+          cached = await getStoriesFromDB(page);
+          cachedFetchedAt = cached?.length > 0 ? await getSyncMeta('last_stories_fetch') : null;
+        } else {
+          const entry = await getTopStoriesFromDB(period, page);
+          cached = entry?.stories;
+          cachedFetchedAt = entry?.fetched_at;
+        }
         if (!cancelled && cached && cached.length > 0) {
           setStories(cached);
           setHasMore(cached.length >= 30);
           setLoading(false);
-          const ts = await getSyncMeta('last_stories_fetch');
-          setFetchedAt(ts);
+          setFetchedAt(cachedFetchedAt);
         }
       } catch {
         // IndexedDB read failed — continue to network
@@ -102,7 +135,7 @@ export function StoryList({ selectedId, storiesRef } = {}) {
 
     load();
     return () => { cancelled = true; };
-  }, [page, fetchStories]);
+  }, [page, period, fetchStories]);
 
   // Expose stories to parent via ref for keyboard navigation
   useEffect(() => {
@@ -114,45 +147,40 @@ export function StoryList({ selectedId, storiesRef } = {}) {
     getStarredStoryIds().then(setStarredIds).catch(() => {});
   }, []);
 
-  // Listen for SSE stories_updated events
+  // Listen for SSE events (frontpage only)
   useEffect(() => {
-    const unsub = on('stories_updated', () => {
-      // Show toast instead of force-refreshing
-      setRefreshReady(true);
-    });
+    if (!isFrontpage) return;
+    const unsub = on('stories_updated', () => setRefreshReady(true));
     return unsub;
-  }, []);
+  }, [isFrontpage]);
 
-  // Listen for SSE sync_required events
   useEffect(() => {
-    const unsub = on('sync_required', () => {
-      // Full re-fetch on sync_required
-      fetchStories(page);
-    });
+    if (!isFrontpage) return;
+    const unsub = on('sync_required', () => fetchStories(page));
     return unsub;
-  }, [page, fetchStories]);
+  }, [isFrontpage, page, fetchStories]);
 
-  // Sync state from URL on hash change (browser back/forward)
+  // Reset page when period changes
   useEffect(() => {
-    function onHashChange() {
-      setPage(getPageFromURL());
-    }
+    setPage(getPageFromURL());
+  }, [period]);
+
+  // Sync page from URL on hash change (browser back/forward)
+  useEffect(() => {
+    function onHashChange() { setPage(getPageFromURL()); }
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
-  const listRef = useRef(null);
-
   function handlePageChange(newPage) {
-    window.location.hash = newPage > 1 ? `#/?page=${newPage}` : '#/';
+    const base = isFrontpage
+      ? (newPage > 1 ? `#/?page=${newPage}` : '#/')
+      : (newPage > 1 ? `#/top/${period}?page=${newPage}` : `#/top/${period}`);
+    window.location.hash = base;
     setPage(newPage);
     const scroller = listRef.current?.closest('.narrow-scroll-container, .split-sidebar');
     if (scroller) scroller.scrollTop = 0;
     else window.scrollTo(0, 0);
-  }
-
-  function handleRefreshReady() {
-    fetchStories(page);
   }
 
   async function handlePullRefresh() {
@@ -180,17 +208,20 @@ export function StoryList({ selectedId, storiesRef } = {}) {
   return (
     <PullToRefresh onRefresh={handlePullRefresh}>
       <div class="story-list-page" ref={listRef}>
-        {(offline || fetchedAt) && (
-          <div class="story-list-status">
-            <div class="story-list-status-left">
-              {offline && <span class="offline-badge">Offline</span>}
-              <StalenessLabel fetchedAt={fetchedAt} refreshReady={refreshReady} />
-            </div>
-            {!isTouch && (
-              <RefreshButton onRefresh={handlePullRefresh} refreshing={pullRefreshing} />
+        <div class="story-list-status">
+          <div class="story-list-status-left">
+            {offline && <span class="offline-badge">Offline</span>}
+            {!isFrontpage && (
+              <span class="top-stories-period-label">
+                {PERIOD_LABELS[period] || 'Top Stories'}
+              </span>
             )}
+            <StalenessLabel fetchedAt={fetchedAt} refreshReady={isFrontpage && refreshReady} />
           </div>
-        )}
+          {!isTouch && (
+            <RefreshButton onRefresh={handlePullRefresh} refreshing={pullRefreshing} />
+          )}
+        </div>
         <div class="story-list">
           {stories.map((story, i) => (
             <StoryItem
@@ -198,14 +229,15 @@ export function StoryList({ selectedId, storiesRef } = {}) {
               story={story}
               rank={(page - 1) * 30 + i + 1}
               starred={starredIds.has(story.id)}
-              prefetched={prefetchedIds.has(story.id)}
+              prefetched={isFrontpage && prefetchedIds.has(story.id)}
               selected={selectedId === story.id}
             />
           ))}
         </div>
+        {!isFrontpage && stories.length === 0 && !loading && (
+          <div class="top-stories-empty">No stories found for this period.</div>
+        )}
         <Pagination page={page} hasMore={hasMore} onPageChange={handlePageChange} />
-
-
       </div>
     </PullToRefresh>
   );

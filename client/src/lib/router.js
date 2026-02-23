@@ -10,7 +10,7 @@ import { useState, useEffect, useCallback } from 'preact/hooks';
  */
 function parseHash(hash) {
   const raw = hash.replace(/^#\/?/, '');
-  if (!raw) return { page: 'home', params: {} };
+  if (!raw) return { page: 'home', id: null, params: {} };
 
   // Split path from query params (e.g. "story/123?comment=456")
   const [path, queryString] = raw.split('?');
@@ -44,10 +44,4 @@ export function useHashRoute() {
   return route;
 }
 
-/**
- * Navigate programmatically.
- * navigate('#/story/123') or navigate('#/')
- */
-export function navigate(hash) {
-  window.location.hash = hash;
-}
+

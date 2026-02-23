@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from 'preact/hooks';
 import { useHashRoute } from './lib/router';
-import { useKeyboardShortcuts, ensureVisible } from './lib/keyboard';
+import { useKeyboardShortcuts } from './lib/keyboard';
+import { useSplitShortcuts, useNarrowShortcuts } from './lib/storyNav';
 import { StoryList } from './pages/StoryList';
-import { TopStoryList } from './pages/TopStoryList';
 import { StoryDetail } from './pages/StoryDetail';
 import { ArticleReader } from './pages/ArticleReader';
 import { Starred } from './pages/Starred';
@@ -92,49 +92,8 @@ function SplitLayout({ route, storiesRef }) {
     }
   }, [readerMode]);
 
-  // r/c view switching + v to open link
-  useKeyboardShortcuts({
-    r: () => {
-      if (selectedId) setReaderMode(true);
-    },
-    c: () => {
-      if (selectedId) setReaderMode(false);
-    },
-    v: () => {
-      if (!selectedId) return;
-      const stories = storiesRef.current;
-      const story = stories && stories.find((s) => s.id === selectedId);
-      if (story && story.url) {
-        window.open(story.url, '_blank', 'noopener,noreferrer');
-      }
-    },
-  });
-
-  // J/K story navigation
-  useKeyboardShortcuts({
-    J: (e) => {
-      e.preventDefault();
-      const stories = storiesRef.current;
-      if (!stories || stories.length === 0) return;
-      const idx = stories.findIndex((s) => s.id === selectedId);
-      const nextIdx = idx < 0 ? 0 : Math.min(idx + 1, stories.length - 1);
-      const targetId = stories[nextIdx].id;
-      window.location.hash = `#/story/${targetId}`;
-      const el = document.querySelector(`.split-sidebar [data-story-id="${targetId}"]`);
-      if (el) ensureVisible(el);
-    },
-    K: (e) => {
-      e.preventDefault();
-      const stories = storiesRef.current;
-      if (!stories || stories.length === 0) return;
-      const idx = stories.findIndex((s) => s.id === selectedId);
-      const targetIdx = idx <= 0 ? 0 : idx - 1;
-      const targetId = stories[targetIdx].id;
-      window.location.hash = `#/story/${targetId}`;
-      const el = document.querySelector(`.split-sidebar [data-story-id="${targetId}"]`);
-      if (el) ensureVisible(el);
-    },
-  });
+  // J/K story navigation, r/c view switching, v open link
+  useSplitShortcuts({ selectedId, storiesRef, setReaderMode });
 
   // Handle clicks on sidebar links that target the already-selected story.
   // When hash doesn't change, the route won't update, so we must reset readerMode manually.
@@ -150,7 +109,7 @@ function SplitLayout({ route, storiesRef }) {
 
   const renderSidebar = () => {
     if (sidebarView.type === 'top') {
-      return <TopStoryList period={sidebarView.period} selectedId={selectedId} storiesRef={storiesRef} />;
+      return <StoryList period={sidebarView.period} selectedId={selectedId} storiesRef={storiesRef} />;
     }
     if (sidebarView.type === 'starred') {
       return <Starred selectedId={selectedId} />;
@@ -193,8 +152,6 @@ function SplitLayout({ route, storiesRef }) {
 
 /** Narrow (mobile) layout — one page at a time, driven by hash route. */
 function NarrowLayout({ route, storiesRef }) {
-  const activeId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
-
   // Track which list view was last visited so the back button returns there
   useEffect(() => {
     const view = getListView(route);
@@ -212,57 +169,8 @@ function NarrowLayout({ route, storiesRef }) {
     prevRouteId.current = isDetail ? route.id : null;
   }, [route.page, route.id]);
 
-  // J/K story navigation in narrow mode
-  useKeyboardShortcuts({
-    J: (e) => {
-      if (route.page !== 'home' && route.page !== 'story' && route.page !== 'article') return;
-      e.preventDefault();
-      const stories = storiesRef.current;
-      if (!stories || stories.length === 0) return;
-      if (route.page === 'home') {
-        window.location.hash = `#/story/${stories[0].id}`;
-      } else {
-        const idx = stories.findIndex((s) => s.id === activeId);
-        if (idx >= 0 && idx < stories.length - 1) {
-          window.location.hash = `#/story/${stories[idx + 1].id}`;
-        }
-      }
-    },
-    K: (e) => {
-      if (route.page !== 'story' && route.page !== 'article') return;
-      e.preventDefault();
-      const stories = storiesRef.current;
-      if (!stories || stories.length === 0) return;
-      const idx = stories.findIndex((s) => s.id === activeId);
-      if (idx > 0) {
-        window.location.hash = `#/story/${stories[idx - 1].id}`;
-      }
-    },
-    r: () => {
-      if (route.page === 'story') {
-        window.location.hash = `#/article/${route.id}`;
-      }
-    },
-    c: () => {
-      if (route.page === 'article') {
-        window.location.hash = `#/story/${route.id}`;
-      }
-    },
-    h: () => {
-      if (route.page === 'story' || route.page === 'article') {
-        window.location.hash = listViewToHash(loadListView());
-      }
-    },
-    v: () => {
-      const id = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
-      if (!id) return;
-      const stories = storiesRef.current;
-      const story = stories && stories.find((s) => s.id === id);
-      if (story && story.url) {
-        window.open(story.url, '_blank', 'noopener,noreferrer');
-      }
-    },
-  });
+  // J/K story navigation, r/c view switching, h back to list, v open link
+  useNarrowShortcuts({ route, storiesRef, listBackHash: listViewToHash(loadListView()) });
 
   const isDetail = route.page === 'story' || route.page === 'article';
   const listView = getListView(route) || loadListView();
@@ -273,7 +181,7 @@ function NarrowLayout({ route, storiesRef }) {
           naturally preserved when toggling between list and detail. */}
       <div class="narrow-scroll-container" style={{ display: isDetail ? 'none' : undefined }}>
         {listView.type === 'starred' && <Starred />}
-        {listView.type === 'top' && <TopStoryList key={listView.period} period={listView.period} storiesRef={storiesRef} />}
+        {listView.type === 'top' && <StoryList key={listView.period} period={listView.period} storiesRef={storiesRef} />}
         {listView.type === 'frontpage' && <StoryList storiesRef={storiesRef} />}
       </div>
       {isDetail && (

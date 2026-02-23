@@ -4,6 +4,7 @@ import { getStoryFromDB, getCommentsFromDB, isStarred, starStory, unstarStory } 
 import { isPrefetchAllowed } from '../lib/sync';
 import { on } from '../lib/sse';
 import { timeAgo } from '../lib/time';
+import { getDomain } from '../lib/url';
 import { useKeyboardShortcuts, ensureVisible } from '../lib/keyboard';
 import { CommentTree } from '../components/CommentTree';
 import { StalenessLabel } from '../components/StalenessLabel';
@@ -279,11 +280,6 @@ export function StoryDetail({ id, onReaderView }) {
 
   if (!story) {
     return <div class="page-error">Story not found.</div>;
-  }
-
-  function getDomain(url) {
-    if (!url) return null;
-    try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return null; }
   }
 
   const domain = getDomain(story.url);
