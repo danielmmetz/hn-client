@@ -51,6 +51,26 @@ button {
 .app {
   max-width: 800px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app > .app-header {
+  flex-shrink: 0;
+}
+
+.app > .app-main {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.narrow-scroll-container {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Wide / split layout ─────────────────────────────────────── */
@@ -137,8 +157,6 @@ button {
   padding: 8px 12px;
   background: var(--orange);
   color: white;
-  position: sticky;
-  top: 0;
   z-index: 100;
 }
 

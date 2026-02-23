@@ -141,10 +141,14 @@ export function StoryList({ selectedId, storiesRef } = {}) {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  const listRef = useRef(null);
+
   function handlePageChange(newPage) {
     window.location.hash = newPage > 1 ? `#/?page=${newPage}` : '#/';
     setPage(newPage);
-    window.scrollTo(0, 0);
+    const scroller = listRef.current?.closest('.narrow-scroll-container, .split-sidebar');
+    if (scroller) scroller.scrollTop = 0;
+    else window.scrollTo(0, 0);
   }
 
   function handleRefreshReady() {
@@ -175,7 +179,7 @@ export function StoryList({ selectedId, storiesRef } = {}) {
 
   return (
     <PullToRefresh onRefresh={handlePullRefresh}>
-      <div class="story-list-page">
+      <div class="story-list-page" ref={listRef}>
         {(offline || fetchedAt) && (
           <div class="story-list-status">
             <div class="story-list-status-left">

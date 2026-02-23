@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'preact/hooks';
+import { useState, useEffect, useCallback, useRef } from 'preact/hooks';
 import { getTopStories } from '../lib/api';
 import { getTopStoriesFromDB, getStarredStoryIds } from '../lib/db';
 import { StoryItem } from '../components/StoryItem';
@@ -110,10 +110,14 @@ export function TopStoryList({ period, selectedId, storiesRef } = {}) {
     return () => window.removeEventListener('hashchange', onHashChange);
   }, []);
 
+  const listRef = useRef(null);
+
   function handlePageChange(newPage) {
     window.location.hash = newPage > 1 ? `#/top/${period}?page=${newPage}` : `#/top/${period}`;
     setPage(newPage);
-    window.scrollTo(0, 0);
+    const scroller = listRef.current?.closest('.narrow-scroll-container, .split-sidebar');
+    if (scroller) scroller.scrollTop = 0;
+    else window.scrollTo(0, 0);
   }
 
   async function handlePullRefresh() {
@@ -140,7 +144,7 @@ export function TopStoryList({ period, selectedId, storiesRef } = {}) {
 
   return (
     <PullToRefresh onRefresh={handlePullRefresh}>
-      <div class="story-list-page">
+      <div class="story-list-page" ref={listRef}>
         <div class="story-list-status">
           <div class="story-list-status-left">
             {offline && <span class="offline-badge">Offline</span>}

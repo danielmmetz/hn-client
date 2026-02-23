@@ -48,6 +48,12 @@ function loadListView() {
   return { type: 'frontpage' };
 }
 
+function listViewToHash(view) {
+  if (view.type === 'top') return `#/top/${view.period || 'day'}`;
+  if (view.type === 'starred') return '#/starred';
+  return '#/';
+}
+
 /** Two-pane split layout used on wide screens. */
 function SplitLayout({ route, storiesRef }) {
   const selectedId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
@@ -189,6 +195,23 @@ function SplitLayout({ route, storiesRef }) {
 function NarrowLayout({ route, storiesRef }) {
   const activeId = (route.page === 'story' || route.page === 'article') ? Number(route.id) : null;
 
+  // Track which list view was last visited so the back button returns there
+  useEffect(() => {
+    const view = getListView(route);
+    if (view) saveListView(view);
+  }, [route.page, route.id]);
+
+  // Scroll the detail container to top when entering a new detail page
+  const detailRef = useRef(null);
+  const prevRouteId = useRef(null);
+  useEffect(() => {
+    const isDetail = route.page === 'story' || route.page === 'article';
+    if (isDetail && route.id !== prevRouteId.current && detailRef.current) {
+      detailRef.current.scrollTop = 0;
+    }
+    prevRouteId.current = isDetail ? route.id : null;
+  }, [route.page, route.id]);
+
   // J/K story navigation in narrow mode
   useKeyboardShortcuts({
     J: (e) => {
@@ -227,7 +250,7 @@ function NarrowLayout({ route, storiesRef }) {
     },
     h: () => {
       if (route.page === 'story' || route.page === 'article') {
-        window.location.hash = '#/';
+        window.location.hash = listViewToHash(loadListView());
       }
     },
     v: () => {
@@ -241,18 +264,26 @@ function NarrowLayout({ route, storiesRef }) {
     },
   });
 
-  switch (route.page) {
-    case 'story':
-      return <StoryDetail key={route.id} id={route.id} storiesRef={storiesRef} />;
-    case 'article':
-      return <ArticleReader key={route.id} id={route.id} storiesRef={storiesRef} />;
-    case 'starred':
-      return <Starred />;
-    case 'top':
-      return <TopStoryList key={route.id} period={route.id} storiesRef={storiesRef} />;
-    default:
-      return <StoryList storiesRef={storiesRef} />;
-  }
+  const isDetail = route.page === 'story' || route.page === 'article';
+  const listView = getListView(route) || loadListView();
+
+  return (
+    <>
+      {/* Each view gets its own scroll container so scroll position is
+          naturally preserved when toggling between list and detail. */}
+      <div class="narrow-scroll-container" style={{ display: isDetail ? 'none' : undefined }}>
+        {listView.type === 'starred' && <Starred />}
+        {listView.type === 'top' && <TopStoryList key={listView.period} period={listView.period} storiesRef={storiesRef} />}
+        {listView.type === 'frontpage' && <StoryList storiesRef={storiesRef} />}
+      </div>
+      {isDetail && (
+        <div class="narrow-scroll-container" ref={detailRef}>
+          {route.page === 'story' && <StoryDetail key={route.id} id={route.id} storiesRef={storiesRef} />}
+          {route.page === 'article' && <ArticleReader key={route.id} id={route.id} storiesRef={storiesRef} />}
+        </div>
+      )}
+    </>
+  );
 }
 
 export function App() {
@@ -346,7 +377,7 @@ export function App() {
     <div class={`app${wide ? ' app-wide' : ''}`}>
       <header class="app-header">
         {!wide && (route.page === 'story' || route.page === 'article') ? (
-          <a href="#/" class="back-btn" aria-label="Back to stories">
+          <a href={listViewToHash(loadListView())} class="back-btn" aria-label="Back to stories">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15 18 9 12 15 6" />
             </svg>
