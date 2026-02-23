@@ -343,8 +343,8 @@ export function StoryDetail({ id, onReaderView }) {
         </div>
       </header>
 
-      {/* Text post body (Ask HN, etc.) */}
-      {!story.url && story.text && (
+      {/* Text post body (Ask HN, Show HN, etc.) */}
+      {story.text && (
         <div class="story-detail-text">
           <div class="story-detail-text-content" dangerouslySetInnerHTML={{ __html: story.text }} />
         </div>
