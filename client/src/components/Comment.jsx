@@ -9,7 +9,7 @@ function countReplies(comment) {
   return count;
 }
 
-export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentId, storyId }) {
+export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentId, storyId, onSelect }) {
   const collapsed = collapsedIds.has(comment.id);
   const replyCount = countReplies(comment);
   const isDeleted = comment.deleted;
@@ -20,7 +20,7 @@ export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentI
       class={`comment${isFocused ? ' comment-focused' : ''}`}
       data-comment-id={comment.id}
     >
-      <div class="comment-body">
+      <div class="comment-body" onClick={(e) => { e.stopPropagation(); onSelect && onSelect(comment.id); }}>
         <div class="comment-header" onClick={() => toggleCollapse(comment.id)}>
           {isDeleted ? (
             <span class="comment-deleted">[deleted]</span>
@@ -30,7 +30,10 @@ export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentI
               <a
                 class="comment-time comment-permalink"
                 href={`#/story/${storyId}?comment=${comment.id}`}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect && onSelect(comment.id);
+                }}
               >
                 {timeAgo(comment.time)}
               </a>
@@ -55,6 +58,7 @@ export function Comment({ comment, collapsedIds, toggleCollapse, focusedCommentI
                     toggleCollapse={toggleCollapse}
                     focusedCommentId={focusedCommentId}
                     storyId={storyId}
+                    onSelect={onSelect}
                   />
                 ))}
               </div>

@@ -378,6 +378,7 @@ export function StoryDetail({ id, onReaderView }) {
               toggleCollapse={toggleCollapse}
               focusedCommentId={focusedCommentId}
               storyId={id}
+              onSelect={setFocusedCommentId}
             />
           )}
         </PullToRefresh>

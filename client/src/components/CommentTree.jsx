@@ -1,6 +1,6 @@
 import { Comment } from './Comment';
 
-export function CommentTree({ comments, collapsedIds, toggleCollapse, focusedCommentId, storyId }) {
+export function CommentTree({ comments, collapsedIds, toggleCollapse, focusedCommentId, storyId, onSelect }) {
   return (
     <section class="comment-tree">
       {comments.length === 0 ? (
@@ -15,6 +15,7 @@ export function CommentTree({ comments, collapsedIds, toggleCollapse, focusedCom
               toggleCollapse={toggleCollapse}
               focusedCommentId={focusedCommentId}
               storyId={storyId}
+              onSelect={onSelect}
             />
           ))}
         </div>
