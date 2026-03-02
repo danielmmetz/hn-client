@@ -46,3 +46,5 @@ sql:
             go_type: "int64"
           - column: "sessions.expires_at"
             go_type: "int64"
+          - column: "stars.starred_at"
+            go_type: "int64"

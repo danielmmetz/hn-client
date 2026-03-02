@@ -1,13 +1,25 @@
 import { openDB } from 'idb';
+import { getCachedUser } from './auth';
 
 const DB_NAME = 'hn-reader';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise;
 
 function getDB() {
   if (!dbPromise) {
     dbPromise = openDB(DB_NAME, DB_VERSION, {
+      blocked(currentVersion, blockedVersion, event) {
+        // Another tab holds an older version — nothing we can do here
+        // except log; the blocking() callback in the other tab handles it
+        console.warn('IndexedDB upgrade blocked by another tab');
+      },
+      blocking(currentVersion, blockedVersion, event) {
+        // This tab's connection is blocking a newer version in another tab — close it
+        event.target.close();
+        dbPromise = null;
+        window.location.reload();
+      },
       upgrade(db, oldVersion) {
         if (oldVersion < 1) {
           // Stories store
@@ -30,6 +42,11 @@ function getDB() {
         if (oldVersion < 2) {
           // Top stories cache keyed by "period:page" (e.g. "yesterday:1")
           db.createObjectStore('top_stories', { keyPath: 'key' });
+        }
+
+        if (oldVersion < 3) {
+          // Pending star changes for server sync (outbox pattern)
+          db.createObjectStore('star_pending', { keyPath: 'story_id' });
         }
       },
     });
@@ -103,12 +120,28 @@ export async function getCommentsFromDB(storyId) {
 
 export async function starStory(storyId) {
   const db = await getDB();
-  await db.put('stars', { story_id: Number(storyId), starred_at: Math.floor(Date.now() / 1000) });
+  const now = Math.floor(Date.now() / 1000);
+  const id = Number(storyId);
+  const tx = db.transaction(['stars', 'star_pending'], 'readwrite');
+  await tx.objectStore('stars').put({ story_id: id, starred_at: now });
+  await tx.objectStore('star_pending').put({ story_id: id, action: 'star', timestamp: now });
+  await tx.done;
+  if (getCachedUser()) {
+    import('./stars-sync.js').then((m) => m.syncStars()).catch(() => {});
+  }
 }
 
 export async function unstarStory(storyId) {
   const db = await getDB();
-  await db.delete('stars', Number(storyId));
+  const now = Math.floor(Date.now() / 1000);
+  const id = Number(storyId);
+  const tx = db.transaction(['stars', 'star_pending'], 'readwrite');
+  await tx.objectStore('stars').delete(id);
+  await tx.objectStore('star_pending').put({ story_id: id, action: 'unstar', timestamp: now });
+  await tx.done;
+  if (getCachedUser()) {
+    import('./stars-sync.js').then((m) => m.syncStars()).catch(() => {});
+  }
 }
 
 export async function isStarred(storyId) {
@@ -175,6 +208,28 @@ export async function getSyncMeta(name) {
   const db = await getDB();
   const meta = await db.get('sync_meta', name);
   return meta ? meta.timestamp : null;
+}
+
+// --- Star Sync Helpers ---
+
+export async function getPendingStarChanges() {
+  const db = await getDB();
+  return db.getAll('star_pending');
+}
+
+export async function clearPendingStarChanges() {
+  const db = await getDB();
+  await db.clear('star_pending');
+}
+
+export async function replaceAllStars(entries) {
+  const db = await getDB();
+  const tx = db.transaction('stars', 'readwrite');
+  await tx.store.clear();
+  for (const entry of entries) {
+    await tx.store.put({ story_id: entry.story_id, starred_at: entry.starred_at });
+  }
+  await tx.done;
 }
 
 // --- Cache Eviction ---

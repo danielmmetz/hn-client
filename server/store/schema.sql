@@ -52,3 +52,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     expires_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS stars (
+    user_sub   TEXT NOT NULL,
+    story_id   INTEGER NOT NULL,
+    starred_at INTEGER NOT NULL,
+    PRIMARY KEY (user_sub, story_id)
+);

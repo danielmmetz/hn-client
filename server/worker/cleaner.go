@@ -53,8 +53,22 @@ func (c *Cleaner) cleanup(ctx context.Context) {
 		return
 	}
 
+	// Build set of starred story IDs to exempt from cleanup
+	starredIDs, err := c.q.ListStarredStoryIDs(ctx, c.db)
+	if err != nil {
+		slog.Error("cleaner: error fetching starred story IDs", "error", err)
+		return
+	}
+	starredSet := make(map[int]struct{}, len(starredIDs))
+	for _, id := range starredIDs {
+		starredSet[id] = struct{}{}
+	}
+
 	deleted := 0
 	for _, id := range ids {
+		if _, starred := starredSet[id]; starred {
+			continue
+		}
 		if ctx.Err() != nil {
 			slog.Info("cleaner: cancelled during cleanup")
 			break

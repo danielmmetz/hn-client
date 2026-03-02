@@ -128,6 +128,7 @@ func main() {
 	articlesHandler := api.NewArticlesHandler(db, q, fetcher)
 	refreshHandler := api.NewRefreshHandler(fetcher, hnClient, db, q, broker)
 	healthHandler := api.NewHealthHandler(db, q)
+	starsHandler := api.NewStarsHandler(db, q)
 	// Auth helper — wraps handlers in auth check when enabled, otherwise passes through
 	var requireAuth func(http.HandlerFunc) http.Handler
 	var requireAuthHandler func(http.Handler) http.Handler
@@ -180,6 +181,7 @@ func main() {
 	mux.Handle("GET /api/stories", requireAuth(storiesHandler.ListStories))
 	mux.Handle("GET /api/health", requireAuthHandler(healthHandler))
 	mux.Handle("GET /api/events", requireAuthHandler(broker))
+	mux.HandleFunc("POST /api/stars/sync", starsHandler.Sync)
 
 	// Static file serving
 	var staticFS fs.FS

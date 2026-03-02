@@ -40,6 +40,12 @@ type Session struct {
 	ExpiresAt int64  `json:"expires_at"`
 }
 
+type Star struct {
+	UserSub   string `json:"user_sub"`
+	StoryID   int    `json:"story_id"`
+	StarredAt int64  `json:"starred_at"`
+}
+
 type Story struct {
 	ID          int     `json:"id"`
 	Title       string  `json:"title"`

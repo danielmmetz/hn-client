@@ -10,7 +10,8 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import { ViewMenu, getViewLabel } from './components/ViewMenu';
 import { connect, disconnect } from './lib/sse';
-import { fetchAuthConfig, fetchUser, login, logout } from './lib/auth';
+import { fetchAuthConfig, fetchUser, getCachedUser, login, logout } from './lib/auth';
+import { syncStars } from './lib/stars-sync';
 
 
 const WIDE_BREAKPOINT = 1100;
@@ -233,7 +234,10 @@ export function App() {
     fetchAuthConfig().then((config) => {
       setAuthConfig(config);
       if (config.enabled) {
-        fetchUser().then(setUser);
+        fetchUser().then((u) => {
+          setUser(u);
+          if (u) syncStars().catch(() => {});
+        });
       } else {
         // No auth available — treat as anonymous (no user)
         setUser(null);
@@ -251,12 +255,20 @@ export function App() {
     function handleVisibility() {
       if (document.visibilityState === 'visible') {
         connect().catch(() => {});
+        if (getCachedUser()) syncStars().catch(() => {});
       }
     }
+
+    function handleOnline() {
+      if (getCachedUser()) syncStars().catch(() => {});
+    }
+
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('online', handleOnline);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('online', handleOnline);
       disconnect();
     };
   }, [authConfig, user]);
