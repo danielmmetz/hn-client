@@ -220,6 +220,13 @@ export function App() {
     setShowMenu(false);
   }, [route.page, route.id]);
 
+  // Reset document title on list views
+  useEffect(() => {
+    if (route.page !== 'story' && route.page !== 'article') {
+      document.title = 'HN Reader';
+    }
+  }, [route.page]);
+
   // Redirect legacy path-based URLs to hash equivalents
   useEffect(() => {
     const path = window.location.pathname;

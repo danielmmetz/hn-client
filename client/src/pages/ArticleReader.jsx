@@ -16,6 +16,13 @@ export function ArticleReader({ id, onShowComments }) {
 
   const sseCleanupRef = useRef(null);
 
+  // Update document title when story loads
+  useEffect(() => {
+    if (story?.title) {
+      document.title = `HN: ${story.title}`;
+    }
+  }, [story?.title]);
+
   useEffect(() => {
     isStarred(id).then(setStarred).catch(() => {});
   }, [id]);

@@ -36,6 +36,13 @@ export function StoryDetail({ id, onReaderView }) {
   const sseCleanupRef = useRef(null);
   const pageRef = useRef(null);
 
+  // Update document title when story loads
+  useEffect(() => {
+    if (story?.title) {
+      document.title = `HN: ${story.title}`;
+    }
+  }, [story?.title]);
+
   const toggleCollapse = useCallback((commentId) => {
     setCollapsedIds((prev) => {
       const next = new Set(prev);
