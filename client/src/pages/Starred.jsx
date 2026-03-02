@@ -38,7 +38,6 @@ export function Starred() {
   if (stories.length === 0) {
     return (
       <div class="starred-page">
-        <h2>Starred Stories</h2>
         <p class="starred-empty">No starred stories yet. Star stories from their detail pages.</p>
       </div>
     );
@@ -46,7 +45,6 @@ export function Starred() {
 
   return (
     <div class="starred-page">
-      <h2 class="starred-title">Starred Stories</h2>
       <div class="story-list">
         {stories.map((story, i) => (
           <StoryItem key={story.id} story={story} rank={i + 1} starred={true} />
