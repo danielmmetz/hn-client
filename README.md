@@ -2,7 +2,7 @@
 
 **Subway-compatible Hacker News.** The idea is simple: you open the app before going underground, and it already has everything you need. The server proactively fetches top stories, their full comment trees, and reader-mode article extractions on a 1-minute cycle. The client prefetches this data into IndexedDB so that stories, articles, and comments are all available offline — no loading spinners, no "connect to read more." When you resurface, it syncs up quietly via SSE.
 
-A mobile-first PWA with a Go+SQLite caching backend. The server proxies and caches HN data (stories, comments, reader-mode article extractions), provides alternative ranking APIs (top of day/week), and streams updates to clients over SSE. Authentication via OIDC is available but optional — controlled by the `-require-auth` flag. The client uses Preact, IndexedDB for offline storage, and a Service Worker for app shell caching.
+A mobile-first PWA with a Go+SQLite caching backend. The server proxies and caches HN data (stories, comments, reader-mode article extractions), provides alternative ranking APIs (top of day/week), and streams updates to clients over SSE. Authentication via OIDC is available but optional — OIDC login is enabled whenever the OIDC flags are provided, and the `-require-auth` flag controls whether login is mandatory or optional. The client uses Preact, IndexedDB for offline storage, and a Service Worker for app shell caching.
 
 ---
 
@@ -40,7 +40,13 @@ All SQL queries are managed with [sqlc](https://sqlc.dev/) — plain SQL in, typ
 
 ### Configuration
 
-Authentication is **optional**, controlled by the `-require-auth` flag. When disabled (the default), API routes are open and `/api/auth/me` returns a dummy anonymous user. When enabled, all API endpoints require a valid OIDC session (PKCE, 30-day max age, stored in SQLite).
+Authentication has two independent aspects: **login capability** and **login requirement**.
+
+- **Login capability** is enabled whenever the OIDC flags (`-oidc-issuer`, `-oidc-client-id`, `-oidc-client-secret`, `-oidc-redirect-uri`) are provided. When enabled, `/api/auth/login`, `/api/auth/callback`, `/api/auth/me`, and `/api/auth/logout` are fully functional, and the UI shows a sign-in/sign-out button. Sessions use PKCE with a 30-day max age and are stored in SQLite.
+- **Login requirement** is controlled by the `-require-auth` flag. When enabled, all API endpoints require a valid OIDC session and the frontend shows a login gate. When disabled (the default), API routes are open to unauthenticated users, but users can still optionally log in if OIDC is configured.
+- If OIDC flags are **not** provided and `-require-auth` is false, the app runs in fully anonymous mode with no login UI.
+
+The `/api/auth/config` endpoint returns `{"enabled": bool, "required": bool}` so the frontend can adapt its UI accordingly.
 
 | Flag | Env Var | Description |
 |---|---|---|

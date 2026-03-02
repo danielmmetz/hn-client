@@ -303,6 +303,22 @@ button {
   color: white;
 }
 
+.signin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  margin-left: 2px;
+}
+
+.signin-btn:hover {
+  color: white;
+}
+
 /* Login Gate */
 .login-gate {
   display: flex;

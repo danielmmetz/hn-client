@@ -65,31 +65,38 @@ func main() {
 
 	q := store.New()
 
-	// OIDC state — only populated when auth is required
+	// OIDC state — initialized whenever OIDC credentials are provided,
+	// regardless of whether auth is required.
 	var authHandler *api.AuthHandler
-	if requireAuthFlag {
-		if oidcIssuer == "" || oidcClientID == "" || oidcClientSecret == "" || oidcRedirectURI == "" {
-			slog.Error("oidc-issuer, oidc-client-id, oidc-client-secret, and oidc-redirect-uri must be set when -require-auth is enabled (via flags or env vars OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URI)")
-			os.Exit(1)
-		}
+	oidcConfigured := oidcIssuer != "" && oidcClientID != "" && oidcClientSecret != "" && oidcRedirectURI != ""
 
+	if requireAuthFlag && !oidcConfigured {
+		slog.Error("oidc-issuer, oidc-client-id, oidc-client-secret, and oidc-redirect-uri must be set when -require-auth is enabled (via flags or env vars OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET, OIDC_REDIRECT_URI)")
+		os.Exit(1)
+	}
+
+	if oidcConfigured {
 		oidcProvider, err := api.SetupOIDCProvider(context.Background(), oidcIssuer)
 		if err != nil {
 			slog.Error("OIDC discovery failed", "error", err)
 			os.Exit(1)
 		}
 
-		oidcConfig := &api.OIDCConfig{
+		oidcCfg := &api.OIDCConfig{
 			Issuer:       oidcIssuer,
 			ClientID:     oidcClientID,
 			ClientSecret: oidcClientSecret,
 			RedirectURI:  oidcRedirectURI,
 		}
 
-		authHandler = api.NewAuthHandler(oidcProvider, oidcConfig, db, q)
-		slog.Info("OIDC configured", "issuer", oidcIssuer)
+		authHandler = api.NewAuthHandler(oidcProvider, oidcCfg, db, q)
+		if requireAuthFlag {
+			slog.Info("OIDC configured, authentication required", "issuer", oidcIssuer)
+		} else {
+			slog.Info("OIDC configured, authentication optional", "issuer", oidcIssuer)
+		}
 	} else {
-		slog.Info("authentication disabled (use -require-auth to enable)")
+		slog.Info("OIDC not configured (login disabled)")
 	}
 
 	// HN client
@@ -143,17 +150,23 @@ func main() {
 	// Routes
 	mux := http.NewServeMux()
 
-	// Auth routes (only registered when auth is required)
-	if requireAuthFlag {
+	// Auth config endpoint — tells the frontend what auth mode is active
+	mux.HandleFunc("GET /api/auth/config", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"enabled":%t,"required":%t}`, oidcConfigured, requireAuthFlag)
+	})
+
+	// Auth routes
+	if oidcConfigured {
+		// Real OIDC auth routes — available whenever OIDC is configured
 		mux.HandleFunc("GET /api/auth/login", authHandler.Login)
 		mux.HandleFunc("GET /api/auth/callback", authHandler.Callback)
 		mux.HandleFunc("GET /api/auth/me", authHandler.Me)
 		mux.HandleFunc("POST /api/auth/logout", authHandler.Logout)
 	} else {
-		// When auth is disabled, /api/auth/me returns a dummy user so the frontend proceeds
+		// When OIDC is not configured, /api/auth/me returns 401
 		mux.HandleFunc("GET /api/auth/me", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"sub":"anonymous","name":"Anonymous"}`))
+			http.Error(w, "not authenticated", http.StatusUnauthorized)
 		})
 	}
 

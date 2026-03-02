@@ -10,7 +10,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { KeyboardShortcutsHelp } from './components/KeyboardShortcutsHelp';
 import { ViewMenu, getViewLabel } from './components/ViewMenu';
 import { connect, disconnect } from './lib/sse';
-import { fetchUser, login, logout } from './lib/auth';
+import { fetchAuthConfig, fetchUser, login, logout } from './lib/auth';
 
 
 const WIDE_BREAKPOINT = 1100;
@@ -195,7 +195,8 @@ function NarrowLayout({ route, storiesRef }) {
 }
 
 export function App() {
-  const [user, setUser] = useState(undefined); // undefined = loading
+  const [user, setUser] = useState(undefined); // undefined = loading, null = not logged in, object = user
+  const [authConfig, setAuthConfig] = useState(undefined); // undefined = loading
   const [showHelp, setShowHelp] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const wide = useWideLayout();
@@ -227,14 +228,23 @@ export function App() {
     }
   }, []);
 
-  // Check auth on mount
+  // Check auth config and user on mount
   useEffect(() => {
-    fetchUser().then(setUser);
+    fetchAuthConfig().then((config) => {
+      setAuthConfig(config);
+      if (config.enabled) {
+        fetchUser().then(setUser);
+      } else {
+        // No auth available — treat as anonymous (no user)
+        setUser(null);
+      }
+    });
   }, []);
 
-  // Initialize SSE only when authenticated
+  // Initialize SSE when ready (authenticated, or auth not required)
   useEffect(() => {
-    if (!user) return;
+    if (authConfig === undefined || user === undefined) return;
+    if (authConfig.required && !user) return;
 
     connect().catch(() => {});
 
@@ -249,10 +259,10 @@ export function App() {
       document.removeEventListener('visibilitychange', handleVisibility);
       disconnect();
     };
-  }, [user]);
+  }, [authConfig, user]);
 
   // Loading state
-  if (user === undefined) {
+  if (authConfig === undefined || user === undefined) {
     return (
       <div class="app">
         <div class="login-gate">
@@ -262,8 +272,8 @@ export function App() {
     );
   }
 
-  // Not authenticated — show login screen
-  if (user === null) {
+  // Auth required but not authenticated — show login gate
+  if (authConfig.required && !user) {
     return (
       <div class="app">
         <div class="login-gate">
@@ -280,7 +290,7 @@ export function App() {
     );
   }
 
-  // Authenticated
+  // App is accessible — user may or may not be logged in
   return (
     <div class={`app${wide ? ' app-wide' : ''}`}>
       <header class="app-header">
@@ -311,13 +321,22 @@ export function App() {
             {showMenu && <ViewMenu route={route} onClose={() => setShowMenu(false)} />}
           </div>
         )}
-        <button class="signout-btn" onClick={logout} title="Sign out">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" y1="12" x2="9" y2="12" />
-          </svg>
-        </button>
+        {user ? (
+          <button class="signout-btn" onClick={logout} title="Sign out">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+          </button>
+        ) : authConfig.enabled ? (
+          <button class="signin-btn" onClick={login} title="Sign in">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+              <circle cx="12" cy="7" r="4" />
+            </svg>
+          </button>
+        ) : null}
       </header>
       <main class="app-main">
         <ErrorBoundary>
