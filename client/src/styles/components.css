@@ -719,6 +719,34 @@
   border-color: var(--orange);
 }
 
+/* Share/Send Button (Story Detail) */
+.send-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  min-width: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s, border-color 0.15s;
+  cursor: pointer;
+  padding: 0;
+}
+
+.send-btn:hover {
+  color: var(--orange);
+  border-color: var(--orange);
+}
+
+.send-btn:active {
+  color: var(--orange);
+  border-color: var(--orange);
+}
+
 /* Star Button (Story Detail) */
 .star-btn {
   background: none;
