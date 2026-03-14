@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -71,7 +72,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	state := randomString(32)
 	verifier := randomString(pkceVerifierLen)
 
-	stateData := state + "|" + verifier
+	// Allow callers to specify a post-login redirect (e.g. custom-scheme
+	// callback for native apps). Falls back to "/" for the web client.
+	postRedirect := r.URL.Query().Get("redirect")
+	if !isSafeRedirect(postRedirect) {
+		postRedirect = "/"
+	}
+
+	stateData := state + "|" + verifier + "|" + postRedirect
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
 		Value:    stateData,
@@ -107,12 +115,27 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing state cookie", http.StatusBadRequest)
 		return
 	}
-	parts := strings.SplitN(cookie.Value, "|", 2)
-	if len(parts) != 2 || parts[0] != state {
+	parts := strings.Split(cookie.Value, "|")
+	var verifier, postRedirect string
+	switch len(parts) {
+	case 3:
+		if parts[0] != state {
+			http.Error(w, "state mismatch", http.StatusBadRequest)
+			return
+		}
+		verifier = parts[1]
+		postRedirect = parts[2]
+	case 2:
+		if parts[0] != state {
+			http.Error(w, "state mismatch", http.StatusBadRequest)
+			return
+		}
+		verifier = parts[1]
+		postRedirect = "/"
+	default:
 		http.Error(w, "state mismatch", http.StatusBadRequest)
 		return
 	}
-	verifier := parts[1]
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     stateCookieName,
@@ -199,7 +222,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	http.Redirect(w, r, "/", http.StatusFound)
+	http.Redirect(w, r, postRedirect, http.StatusFound)
 }
 
 // Me returns the current user's info or 401.
@@ -241,6 +264,28 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true}`))
+}
+
+// --- Redirect Validation ---
+
+// isSafeRedirect returns true if the redirect target is safe to use after login.
+// Allowed: relative paths (starting with "/") and the hnreader custom scheme
+// used by the iOS app. Everything else (including absolute HTTP(S) URLs to
+// third-party hosts) is rejected to prevent open-redirect attacks.
+func isSafeRedirect(target string) bool {
+	if target == "" {
+		return false
+	}
+	// Relative paths are safe (same origin).
+	if strings.HasPrefix(target, "/") && !strings.HasPrefix(target, "//") {
+		return true
+	}
+	// Allow the iOS app's custom scheme.
+	parsed, err := url.Parse(target)
+	if err != nil {
+		return false
+	}
+	return parsed.Scheme == "hnreader"
 }
 
 // --- PKCE Helpers ---
