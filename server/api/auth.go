@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -229,6 +230,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	if err == nil && parsed.Scheme == "hnreader" {
 		q := parsed.Query()
 		q.Set("session", sessionToken)
+		q.Set("expires_at", fmt.Sprintf("%d", expiresAt))
 		parsed.RawQuery = q.Encode()
 		finalRedirect = parsed.String()
 	}
