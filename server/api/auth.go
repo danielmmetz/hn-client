@@ -222,7 +222,18 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	http.Redirect(w, r, postRedirect, http.StatusFound)
+	// For the iOS app's custom-scheme redirect, include the session token
+	// as a query parameter so the app can set the cookie itself.
+	finalRedirect := postRedirect
+	parsed, err := url.Parse(postRedirect)
+	if err == nil && parsed.Scheme == "hnreader" {
+		q := parsed.Query()
+		q.Set("session", sessionToken)
+		parsed.RawQuery = q.Encode()
+		finalRedirect = parsed.String()
+	}
+
+	http.Redirect(w, r, finalRedirect, http.StatusFound)
 }
 
 // Me returns the current user's info or 401.
