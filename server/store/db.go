@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -24,6 +25,16 @@ func Open(path string) (*sql.DB, error) {
 	if _, err := db.Exec(schema); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
+	}
+
+	// Migrations for columns added after initial schema creation.
+	// ALTER TABLE ADD COLUMN IF NOT EXISTS is not supported by all SQLite builds,
+	// so attempt the ALTER and ignore "duplicate column" errors.
+	if _, err := db.Exec(`ALTER TABLE comments ADD COLUMN position INTEGER NOT NULL DEFAULT 0`); err != nil {
+		if !strings.Contains(err.Error(), "duplicate column") {
+			db.Close()
+			return nil, fmt.Errorf("migrate comments.position: %w", err)
+		}
 	}
 
 	slog.Info("database ready", "path", path)

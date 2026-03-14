@@ -48,9 +48,9 @@ func (q *Queries) GetCommentIDsByStory(ctx context.Context, db DBTX, storyID int
 }
 
 const getCommentsByStory = `-- name: GetCommentsByStory :many
-SELECT id, story_id, parent_id, by, text, time, dead, deleted, fetched_at
+SELECT id, story_id, parent_id, by, text, time, dead, deleted, fetched_at, position
 FROM comments WHERE story_id = ?
-ORDER BY time ASC
+ORDER BY position ASC
 `
 
 func (q *Queries) GetCommentsByStory(ctx context.Context, db DBTX, storyID int) ([]*Comment, error) {
@@ -72,6 +72,7 @@ func (q *Queries) GetCommentsByStory(ctx context.Context, db DBTX, storyID int) 
 			&i.Dead,
 			&i.Deleted,
 			&i.FetchedAt,
+			&i.Position,
 		); err != nil {
 			return nil, err
 		}
@@ -87,13 +88,13 @@ func (q *Queries) GetCommentsByStory(ctx context.Context, db DBTX, storyID int) 
 }
 
 const upsertComment = `-- name: UpsertComment :exec
-INSERT INTO comments (id, story_id, parent_id, by, text, time, dead, deleted, fetched_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO comments (id, story_id, parent_id, by, text, time, dead, deleted, fetched_at, position)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     story_id=excluded.story_id, parent_id=excluded.parent_id,
     by=excluded.by, text=excluded.text, time=excluded.time,
     dead=excluded.dead, deleted=excluded.deleted,
-    fetched_at=excluded.fetched_at
+    fetched_at=excluded.fetched_at, position=excluded.position
 `
 
 type UpsertCommentParams struct {
@@ -106,6 +107,7 @@ type UpsertCommentParams struct {
 	Dead      bool    `json:"dead"`
 	Deleted   bool    `json:"deleted"`
 	FetchedAt int64   `json:"fetched_at"`
+	Position  int     `json:"position"`
 }
 
 func (q *Queries) UpsertComment(ctx context.Context, db DBTX, arg UpsertCommentParams) error {
@@ -119,6 +121,7 @@ func (q *Queries) UpsertComment(ctx context.Context, db DBTX, arg UpsertCommentP
 		arg.Dead,
 		arg.Deleted,
 		arg.FetchedAt,
+		arg.Position,
 	)
 	return err
 }

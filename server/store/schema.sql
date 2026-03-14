@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS comments (
     time        INTEGER NOT NULL,
     dead        BOOLEAN NOT NULL DEFAULT FALSE,
     deleted     BOOLEAN NOT NULL DEFAULT FALSE,
-    fetched_at  INTEGER NOT NULL
+    fetched_at  INTEGER NOT NULL,
+    position    INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_comments_story ON comments(story_id);
 

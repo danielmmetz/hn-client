@@ -24,6 +24,7 @@ type Comment struct {
 	Dead      bool    `json:"dead"`
 	Deleted   bool    `json:"deleted"`
 	FetchedAt int64   `json:"fetched_at"`
+	Position  int     `json:"position"`
 }
 
 type Ranking struct {

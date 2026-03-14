@@ -91,6 +91,12 @@ func (f *Fetcher) fetchCommentsRecursive(ctx context.Context, storyID int, kids 
 	items := f.client.GetItems(ctx, kids)
 	now := time.Now().Unix()
 
+	// Build a position map from the kids ordering provided by HN.
+	position := make(map[int]int, len(kids))
+	for i, id := range kids {
+		position[id] = i
+	}
+
 	for _, item := range items {
 		if item == nil {
 			continue
@@ -118,6 +124,7 @@ func (f *Fetcher) fetchCommentsRecursive(ctx context.Context, storyID int, kids 
 			ID: item.ID, StoryID: storyID, ParentID: parentID,
 			By: by, Text: text, Time: item.Time,
 			Dead: item.Dead, Deleted: item.Deleted, FetchedAt: now,
+			Position: position[item.ID],
 		}); err != nil {
 			slog.Error("error upserting comment", "comment_id", item.ID, "error", err)
 			continue
