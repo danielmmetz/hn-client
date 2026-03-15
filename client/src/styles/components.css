@@ -676,7 +676,7 @@
 /* Comments Button (Article Reader) */
 .comments-btn {
   background: none;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius);
   color: var(--text-muted);
   min-width: 32px;
@@ -694,13 +694,12 @@
 
 .comments-btn:hover {
   color: var(--orange);
-  border-color: var(--orange);
 }
 
 /* Reader Button (Story Detail) */
 .reader-btn {
   background: none;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius);
   color: var(--text-muted);
   min-width: 32px;
@@ -716,13 +715,12 @@
 
 .reader-btn:hover {
   color: var(--orange);
-  border-color: var(--orange);
 }
 
 /* Share/Send Button (Story Detail) */
 .send-btn {
   background: none;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius);
   color: var(--text-muted);
   min-width: 32px;
@@ -739,20 +737,18 @@
 
 .send-btn:hover {
   color: var(--orange);
-  border-color: var(--orange);
 }
 
 .send-btn:active {
   color: var(--orange);
-  border-color: var(--orange);
 }
 
 /* Star Button (Story Detail) */
 .star-btn {
   background: none;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: var(--radius);
-  font-size: 1.1rem;
+  font-size: 1.4rem;
   line-height: 1;
   color: var(--text-muted);
   min-width: 32px;
@@ -767,12 +763,10 @@
 
 .star-btn:hover {
   color: var(--orange);
-  border-color: var(--orange);
 }
 
 .star-btn-active {
   color: var(--orange);
-  border-color: var(--orange);
 }
 
 /* Star Indicator (Story Item) */

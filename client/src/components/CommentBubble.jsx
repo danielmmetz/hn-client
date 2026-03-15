@@ -1,35 +1,37 @@
-export function CommentBubble({ count, scale = 1 }) {
+export function CommentBubble({ count, scale = 1, variant = 'orange' }) {
   const n = count ?? 0;
   const label =
     n >= 10000 ? `${Math.round(n / 1000)}k`
     : n >= 1000 ? `${(n / 1000).toFixed(1)}k`
     : String(n);
 
-  // Bubble body dimensions
-  const W = 34;   // width
-  const BH = 22;  // body height
-  const rx = 5;   // corner radius
-  const tailH = 6;
-  const tx1 = 7;  // tail left base x
-  const tx2 = 13; // tail right base x
-  const tip = 2;  // tail tip x
-
+  // Minimum width to fit 4 digits; use wider if needed
+  const minW = 38;
+  const W = minW;
+  const tailH = 5;
+  const BH = 22;          // body height (total height minus tail)
   const totalH = BH + tailH;
+  const rx = Math.min(BH / 2, W / 2); // pill radius
+  const tailW = 7;
 
-  // Rounded rect with bottom-left tail
+  // For outline variant, shift tail to start at rx to avoid overlapping the arc
+  const tailLeft = variant === 'grey' ? rx : 6;
+  const tailRight = tailLeft + tailW;
+
+  // Pill body with triangular tail
   const d = [
     `M${rx},0`,
     `H${W - rx}`,
-    `Q${W},0 ${W},${rx}`,
+    `A${rx},${rx} 0 0 1 ${W},${rx}`,
     `V${BH - rx}`,
-    `Q${W},${BH} ${W - rx},${BH}`,
-    `H${tx2}`,
-    `L${tip},${totalH}`,
-    `L${tx1},${BH}`,
+    `A${rx},${rx} 0 0 1 ${W - rx},${BH}`,
+    `H${tailRight}`,
+    `L${tailLeft},${totalH}`,
+    `L${tailLeft},${BH}`,
     `H${rx}`,
-    `Q0,${BH} 0,${BH - rx}`,
+    `A${rx},${rx} 0 0 1 0,${BH - rx}`,
     `V${rx}`,
-    `Q0,0 ${rx},0`,
+    `A${rx},${rx} 0 0 1 ${rx},0`,
     'Z',
   ].join(' ');
 
@@ -41,13 +43,17 @@ export function CommentBubble({ count, scale = 1 }) {
       aria-hidden="true"
       style="overflow: visible"
     >
-      <path d={d} fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
+      <path d={d}
+        fill={variant === 'grey' ? 'none' : 'rgba(255, 102, 0, 0.1)'}
+        stroke={variant === 'grey' ? 'currentColor' : 'none'}
+        stroke-width={variant === 'grey' ? '1.5' : '0'}
+      />
       <text
         x={W / 2}
         y={BH / 2}
         dy="0.35em"
         text-anchor="middle"
-        fill="currentColor"
+        fill={variant === 'grey' ? 'currentColor' : '#ff6600'}
         font-size="12"
         font-weight="700"
       >

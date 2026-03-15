@@ -42,7 +42,7 @@ export function StoryItem({ story, rank, starred, prefetched, selected }) {
       <div class="story-item-actions">
         {story.url ? (
           <a href={`#/article/${story.id}`} class="story-item-action-icon story-item-action-icon--reader" aria-label="Reader view">
-            <svg viewBox="0 0 24 24" width="23" height="20" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <svg viewBox="0 0 24 24" width="23" height="20" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
           </a>
         ) : (
           <span class="story-item-action-icon story-item-action-placeholder" aria-hidden="true" />

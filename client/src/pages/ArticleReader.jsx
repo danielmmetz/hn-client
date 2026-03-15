@@ -5,6 +5,7 @@ import { on } from '../lib/sse';
 import { timeAgo } from '../lib/time';
 import { getDomain } from '../lib/url';
 import { ArticleView } from '../components/ArticleView';
+import { CommentBubble } from '../components/CommentBubble';
 
 export function ArticleReader({ id, onShowComments }) {
   const [story, setStory] = useState(null);
@@ -173,9 +174,7 @@ export function ArticleReader({ id, onShowComments }) {
               onClick={onShowComments}
               aria-label={`${story.descendants ?? 0} comments`}
             >
-              <svg viewBox="0 0 18 16" width="18" height="16" aria-hidden="true">
-                <path d="M3,0 H15 Q18,0 18,3 V9 Q18,12 15,12 H9 L1,16 L5,12 H3 Q0,12 0,9 V3 Q0,0 3,0 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-              </svg>
+              <CommentBubble count={story.descendants} variant="grey" />
             </button>
           ) : (
             <a
@@ -183,9 +182,7 @@ export function ArticleReader({ id, onShowComments }) {
               class="comments-btn"
               aria-label={`${story.descendants ?? 0} comments`}
             >
-              <svg viewBox="0 0 18 16" width="18" height="16" aria-hidden="true">
-                <path d="M3,0 H15 Q18,0 18,3 V9 Q18,12 15,12 H9 L1,16 L5,12 H3 Q0,12 0,9 V3 Q0,0 3,0 Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" />
-              </svg>
+              <CommentBubble count={story.descendants} variant="grey" />
             </a>
           )}
           <button
