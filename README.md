@@ -78,7 +78,7 @@ Vim-style keyboard navigation. Press `?` to toggle a help modal.
 |---|---|---|
 | `J` / `K` | Next / previous story | Story list / split sidebar |
 | `j` / `k` | Next / previous comment | Comments view |
-| `x` | Collapse/expand comment subtree | Focused comment |
+| `x` / `o` / `Enter` | Collapse/expand comment subtree | Focused comment |
 | `r` | Reader view | Story selected |
 | `c` | Comments view | Reader view |
 | `?` | Toggle shortcut help | Global |

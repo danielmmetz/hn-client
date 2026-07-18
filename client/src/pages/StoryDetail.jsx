@@ -71,6 +71,15 @@ export function StoryDetail({ id, onReaderView }) {
     return Array.from(pageRef.current.querySelectorAll('.comment[data-comment-id]'));
   }
 
+  function toggleFocusedCollapse(e) {
+    // Don't hijack Enter when an interactive element has focus
+    if (e.target.closest?.('a, button')) return;
+    if (focusedCommentId !== null) {
+      e.preventDefault();
+      toggleCollapse(focusedCommentId);
+    }
+  }
+
   // Keyboard shortcuts for comment navigation
   useKeyboardShortcuts({
     j: (e) => {
@@ -107,12 +116,9 @@ export function StoryDetail({ id, onReaderView }) {
         clearCommentParam();
       }
     },
-    x: (e) => {
-      if (focusedCommentId !== null) {
-        e.preventDefault();
-        toggleCollapse(focusedCommentId);
-      }
-    },
+    x: toggleFocusedCollapse,
+    o: toggleFocusedCollapse,
+    Enter: toggleFocusedCollapse,
     y: (e) => {
       if (focusedCommentId !== null) {
         e.preventDefault();
